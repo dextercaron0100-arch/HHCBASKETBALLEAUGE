@@ -1,0 +1,11 @@
+.tools
+**/node_modules
+**/.next
+**/bin
+**/obj
+**/uploads
+**/*.db*
+.env*
+.git
+**/test-results
+**/playwright-report

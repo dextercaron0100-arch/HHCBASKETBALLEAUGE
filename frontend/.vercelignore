@@ -1,0 +1,11 @@
+.next
+node_modules
+.env*
+!.env.example
+.vercel
+tests
+test-results
+playwright-report
+playwright.config.ts
+AGENTS.md
+*.tsbuildinfo

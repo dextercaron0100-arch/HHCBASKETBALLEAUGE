@@ -1,0 +1,6 @@
+services:
+  backend-public:
+    image: cloudflare/cloudflared:latest
+    container_name: hhc-backend-public
+    command: tunnel --no-autoupdate --protocol http2 --url http://backend:8080
+    restart: "no"

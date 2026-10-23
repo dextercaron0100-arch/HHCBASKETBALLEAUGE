@@ -1,0 +1,26 @@
+{
+  "Junior": [
+    { "slot": 1, "name": "BJV Daily Dash" },
+    { "slot": 2, "name": "Bougain" },
+    { "slot": 3, "name": "Rookie Hoopers" },
+    { "slot": 4, "name": "Pueblo Warriors" },
+    { "slot": 5, "name": "Caught Lacking (sean and friends)" },
+    { "slot": 6, "name": "Tropang Matik" },
+    { "slot": 7, "name": "Bougainvillains" },
+    { "slot": 12, "name": "Team HHC" }
+  ],
+  "Senior": [
+    { "slot": 1, "name": "Ballgamevilla" },
+    { "slot": 2, "name": "KONPL" },
+    { "slot": 3, "name": "Pipol Broadband" },
+    { "slot": 4, "name": "Ibayo" },
+    { "slot": 5, "name": "Boss Siomai" },
+    { "slot": 6, "name": "G Movers" },
+    { "slot": 7, "name": "Centerfield" },
+    { "slot": 8, "name": "Zac Enterprise" },
+    { "slot": 9, "name": "Bucks City" },
+    { "slot": 10, "name": "Emperador Warriors Barkada" },
+    { "slot": 11, "name": "Team MCH" },
+    { "slot": 12, "name": "Team HHC" }
+  ]
+}

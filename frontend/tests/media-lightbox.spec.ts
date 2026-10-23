@@ -1,0 +1,31 @@
+import { test, expect } from "@playwright/test";
+
+test("announcement posters open in a popup and restore keyboard focus", async ({ page, context }) => {
+  await page.goto("/news");
+  const poster = page.getByRole("button", { name: /Open full poster:/ }).first();
+  await poster.click();
+  const preview = page.getByRole("dialog");
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Close image preview", exact: true })).toBeFocused();
+  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+  expect(context.pages()).toHaveLength(1);
+  await expect(page).toHaveURL(/\/news$/);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(poster).toBeFocused();
+  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+  await page.keyboard.press("Enter");
+  await expect(preview).toBeVisible();
+  await preview.getByRole("button", { name: "Close image preview", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await poster.click();
+  await expect(preview).toBeVisible();
+  await preview.locator("img").evaluate(image => (image as HTMLImageElement).decode());
+  const bounds = await preview.boundingBox();
+  expect(bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.height).toBeLessThanOrEqual(844);
+  await page.screenshot({ path: "test-results/announcement-popup-mobile.png" });
+  await page.mouse.click(3, 3);
+  await expect(preview).toHaveCount(0);
+});

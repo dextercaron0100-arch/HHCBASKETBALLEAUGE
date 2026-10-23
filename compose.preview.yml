@@ -1,0 +1,6 @@
+services:
+  public-preview:
+    image: cloudflare/cloudflared:latest
+    container_name: hhc-public-preview
+    command: tunnel --no-autoupdate --protocol http2 --url http://frontend:3000
+    restart: "no"

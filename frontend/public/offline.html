@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d131c">
+  <title>HHC Basketball League · Reconnecting</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#0d131c;color:#edf1f7;font:16px/1.7 "Segoe UI",Arial,sans-serif;padding:24px}.card{width:min(100%,540px);padding:36px;border:1px solid #ffffff18;border-radius:20px;background:#18212c}.brand{font-size:11px;font-weight:800;letter-spacing:2px;color:#f4c64e}.symbol{display:grid;place-items:center;width:58px;height:58px;margin:26px 0 18px;border:1px solid #f4c64e30;border-radius:16px;background:#f4c64e0c;color:#f4c64e;font-size:28px}h1{font-size:29px;line-height:1.25;letter-spacing:-.8px;margin:0 0 16px}p{margin:12px 0;color:#acbbcd;font-size:14px}button{min-height:46px;width:100%;margin-top:16px;padding:12px 20px;background:#f4c64e;border:0;border-radius:10px;color:#17212b;font:700 14px "Segoe UI",Arial,sans-serif;cursor:pointer}button:focus-visible{outline:2px solid #f4c64e;outline-offset:4px}button:disabled{opacity:.65;cursor:wait}.status{font-size:12px;min-height:40px;margin-top:16px}.note{font-size:12px;padding-top:16px;border-top:1px solid #ffffff12}@media(max-width:400px){.card{padding:24px}h1{font-size:25px}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <span class="brand">HHC BASKETBALL LEAGUE</span>
+    <div class="symbol" aria-hidden="true">↻</div>
+    <h1>Let’s get you back on the court.</h1>
+    <p>We couldn’t reach the league server. Your connection may be offline, or the temporary public link may have expired.</p>
+    <button id="retry" type="button">Try again</button>
+    <p id="status" class="status" role="status">We’ll reconnect automatically when the site is reachable.</p>
+    <p class="note">If your internet is working, use the latest site link from the organizer. Scores and scorekeeping require a live connection.</p>
+    <noscript><p><a href="/" style="color:#f4c64e">Return to the site</a></p></noscript>
+  </main>
+  <script>
+    const retry = document.getElementById('retry');
+    const status = document.getElementById('status');
+    let checking = false;
+    async function reconnect() {
+      if (checking) return;
+      checking = true;
+      retry.disabled = true;
+      status.textContent = 'Checking the connection…';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        const response = await fetch('/api/v1/public', { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error('Server unavailable');
+        const league = await response.json();
+        if (!Array.isArray(league.teams)) throw new Error('Unexpected response');
+        status.textContent = 'Connected. Opening the site…';
+        if (location.pathname === '/offline.html') location.replace('/');
+        else location.reload();
+      } catch {
+        status.textContent = navigator.onLine ? 'The server is still unreachable. If you’re using a temporary link, check for a newer address.' : 'You’re offline. Connect to Wi-Fi or mobile data to continue.';
+      } finally {
+        clearTimeout(timeout);
+        checking = false;
+        retry.disabled = false;
+      }
+    }
+    retry.addEventListener('click', reconnect);
+    window.addEventListener('online', reconnect);
+    setInterval(reconnect, 10000);
+    reconnect();
+  </script>
+</body>
+</html>

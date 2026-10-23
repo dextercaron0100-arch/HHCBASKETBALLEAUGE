@@ -1,0 +1,34 @@
+import { test, expect } from "@playwright/test";
+
+test("top navigation supports keyboard dropdowns and responsive links", async ({ page }) => {
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Main navigation", exact: true });
+  await expect(nav.getByRole("link", { name: "Home", exact: true })).toHaveAttribute("aria-current", "page");
+  const more = nav.getByRole("button", { name: "More", exact: true });
+  await more.focus();
+  await page.keyboard.press("Enter");
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Live scoreboard", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(more).toBeFocused();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await more.click();
+  await page.getByRole("link", { name: "Statistics & awards", exact: true }).click();
+  await expect(page).toHaveURL(/\/statistics$/);
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await page.screenshot({ path: "test-results/navigation-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const toggle = page.getByRole("button", { name: "Open navigation", exact: true });
+  await toggle.click();
+  const mobile = page.getByRole("navigation", { name: "Mobile navigation", exact: true });
+  await expect(mobile).toBeVisible();
+  await page.screenshot({ path: "test-results/navigation-mobile.png" });
+  await mobile.getByRole("link", { name: "Games", exact: true }).click();
+  await expect(page).toHaveURL(/\/schedule$/);
+  await expect(mobile).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await expect(nav).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

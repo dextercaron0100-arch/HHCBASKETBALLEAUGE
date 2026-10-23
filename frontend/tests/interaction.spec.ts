@@ -1,0 +1,36 @@
+import { test, expect } from "@playwright/test";
+
+test("loading feedback, keyboard menus, reconnect status and reduced motion", async ({ page, context }) => {
+  let release!: () => void;
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/v1/public", async route => { await ready; await route.continue(); });
+  await page.goto("/");
+  await expect(page.getByRole("status", { name: "Loading league content" })).toBeVisible();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
+  release();
+  await expect(page.getByRole("heading", { name: "Game on. Community first." })).toBeVisible();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  const more = page.getByRole("button", { name: "More", exact: true });
+  await more.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("link", { name: "Live scoreboard", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("link", { name: "Statistics & awards", exact: true })).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("link", { name: "Calendar & results", exact: true })).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(page.getByRole("link", { name: "Live scoreboard", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(more).toBeFocused();
+  await context.setOffline(true);
+  await expect(page.locator(".connection-notice")).toContainText("You’re offline");
+  await context.setOffline(false);
+  await expect(page.locator(".connection-notice")).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator("main")).toHaveCSS("animation-name", "none");
+  await expect(page.locator(".hero-progress")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Play hero slideshow", exact: true })).toBeAttached();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("button", { name: "Open navigation", exact: true })).toHaveCSS("height", "44px");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
