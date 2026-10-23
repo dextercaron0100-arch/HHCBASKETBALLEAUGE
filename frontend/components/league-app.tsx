@@ -136,7 +136,8 @@ export default function LeagueApp({ initialDivision = "Junior", initialTeam = ""
       }
     : null;
   return (
-    <div className="app-shell horizontal-layout section-backgrounds" data-page={path}>
+    <div className="app-shell horizontal-layout full-page-backgrounds" data-page={path}>
+      <div className="league-page-background" aria-hidden="true" />
       <a href="#main" className="skip-link">
         Skip to content
       </a>
