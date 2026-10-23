@@ -2,7 +2,7 @@
 
 A league platform for Junior and Open divisions, team rosters, live scorekeeping, and organizer administration. The interface uses Next.js 16, TypeScript, Tailwind, and shadcn-compatible components. The API uses ASP.NET Core 10, Identity, Entity Framework Core, PostgreSQL 18, and SignalR.
 
-The public site is currently in maintenance mode. Change `frontend/lib/site-status.ts` and redeploy to reopen it. This repository contains application source and public image assets; live league data, private uploads, credentials, and local backups are not included.
+Maintenance mode is controlled by `frontend/lib/site-status.ts`; set it to `true` to show the maintenance page or `false` to open the league site, then redeploy. This repository contains application source and public image assets; live league data, private uploads, credentials, and local backups are not included.
 
 Public frontend: **https://hhcbasketballleague.vercel.app**. The backend and data remain on this computer. Keep Docker and `hhc-backend-public` running for league data, logos, sign-in, and live scores. Redeploy frontend changes with `./infrastructure/deploy-vercel.ps1`; see [deployment](docs/deployment.md) for backend tunnel renewal.
 

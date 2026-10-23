@@ -1,2 +1,2 @@
-// Set to false and redeploy when the league site is ready to reopen.
-export const maintenanceMode = true;
+// Set to true and redeploy to show the maintenance page.
+export const maintenanceMode = false;
