@@ -51,3 +51,30 @@ test("recorded playoff teams and confirmed winner appear in the bracket", async 
   await expect(match.locator(".winner b")).toHaveText("82");
   await expect(match).toHaveAttribute("href", "/live?game=playoff-display-test");
 });
+
+test("mobile round controls expose every matchup and reset for a new division", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/playoffs?division=Senior");
+  const rounds = page.getByRole("group", { name: "Choose playoff round" });
+  await expect(page.locator(".postseason-match:visible")).toHaveCount(4);
+  await expect(page.getByRole("heading", { name: /Round of 12/ })).toBeVisible();
+  await rounds.getByRole("button", { name: /Quarterfinals/ }).click();
+  await expect(page.locator(".postseason-match:visible")).toHaveCount(4);
+  await expect(page.locator(".postseason-bye:visible")).toHaveCount(4);
+  await rounds.getByRole("button", { name: /Semifinals/ }).click();
+  await expect(page.locator(".postseason-match:visible")).toHaveCount(2);
+  await rounds.getByRole("button", { name: /Championship/ }).click();
+  await expect(page.locator(".postseason-match:visible")).toHaveCount(2);
+  await expect(page.locator(".championship")).toBeVisible();
+  await expect(page.locator(".third-place")).toBeVisible();
+  await page.getByText("Qualification & tournament rules", { exact: true }).click();
+  await expect(page.locator(".postseason-rules")).toBeVisible();
+  await page.getByRole("button", { name: "Junior", exact: true }).click();
+  await expect(rounds.getByRole("button", { name: /Quarterfinals/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".postseason-match:visible")).toHaveCount(4);
+  await expect(page.locator(".postseason-rules")).toContainText("Top four");
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
