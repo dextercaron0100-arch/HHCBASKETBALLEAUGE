@@ -248,7 +248,7 @@ export default function LeagueApp({ initialDivision = "Junior", initialTeam = ""
         </main>
         <footer className="footer">
           <span>© {activeSeason?.year || 2026} HHC BASKETBALL LEAGUE</span>
-          <span>Every game. One community.</span>
+          <span>Powered by <strong>Herrera Technologies</strong></span>
         </footer>
       </div>
     </div>
