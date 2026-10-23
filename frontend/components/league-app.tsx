@@ -13,6 +13,8 @@ import {
   CircleDot,
   Home,
   ImageIcon,
+  LayoutGrid,
+  List,
   MapPin,
   Radio,
   ShieldCheck,
@@ -700,6 +702,7 @@ function StandingsTable({
 }) {
   const [rows, setRows] = useState<Standing[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const sizes = league.seasons.find(s => s.id === season)?.groupSizes?.[division] ?? [6, 6];
   const qualifyingPlaces = division === "Senior" && sizes.join(",") === "4,4,4,4" ? 3 : sizes.length === 2 ? 4 : 0;
   const groupSize = league.seasons.find(s => s.id === season)?.groupSizes?.[division]?.[group.charCodeAt(0) - 65] ?? 6;
@@ -709,6 +712,8 @@ function StandingsTable({
   useEffect(() => {
     if (!season) return;
     let current = true;
+    setLoading(true);
+    setError("");
     setRows([]);
     api<Standing[]>(`/standings/${season}/${division}/${group}`)
       .then((r) => {
@@ -716,14 +721,16 @@ function StandingsTable({
         setRows(r);
         setError("");
       })
-      .catch((e) => { if (current) setError(e.message); });
+      .catch((e) => { if (current) setError(e.message); })
+      .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [season, division, group, league.revision]);
   return (
     <>
       {error && <p className="error">{error}</p>}
-      <div className="table-wrap">
+      <div className={`table-wrap standings-table-wrap ${compact ? "is-compact" : ""}`} aria-busy={loading}>
         <table>
+          <caption className="sr-only">{divisionLabel(division)} division, Group {group} standings</caption>
           <thead>
             <tr>
               <th>#</th>
@@ -745,13 +752,13 @@ function StandingsTable({
                   </span>
                 </td>
                 <td>
-                  <span className="table-team">
+                  <Link className="table-team" href={`/teams?division=${division}&team=${row.teamId}#team-roster`}>
                     <TeamMark
                       team={league.teams.find((t) => t.id === row.teamId)}
                       size="tiny"
                     />
                     {row.name}
-                  </span>
+                  </Link>
                 </td>
                 {!compact && <td>{row.wins + row.losses}</td>}
                 <td className="table-number">{row.wins}</td>
@@ -779,7 +786,9 @@ function StandingsTable({
           </tbody>
         </table>
       </div>
-      {rows.length === 0 && !error && (
+      {loading && <div className="standings-loading" role="status"><span className="standings-loading-bar" />Loading Group {group} standings…</div>}
+      {!compact && !loading && rows.length > 0 && <div className="standings-key"><span><b>GP</b> Played</span><span><b>W / L</b> Wins / losses</span><span><b>PF / PA</b> Points for / against</span><span><b>DIFF</b> Point difference</span></div>}
+      {rows.length === 0 && !error && !loading && (
         <Empty
           title="Standings start here"
           description="Approved teams will appear when the league opens."
@@ -803,7 +812,22 @@ function Teams({
   const [player, setPlayer] = useState<Player | null>(null);
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState("All");
+  const [directoryView, setDirectoryView] = useState<"grid" | "list">("grid");
+  const teamButtons = useRef(new Map<string, HTMLButtonElement>());
   const rosterRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    try { if (localStorage.getItem("hhc-team-directory-view") === "list") setDirectoryView("list"); } catch {}
+  }, []);
+  function chooseDirectoryView(value: "grid" | "list") {
+    setDirectoryView(value);
+    try { localStorage.setItem("hhc-team-directory-view", value); } catch {}
+  }
+  function closeRoster() {
+    const button = selected ? teamButtons.current.get(selected.id) : undefined;
+    setSelected(null);
+    setPlayer(null);
+    requestAnimationFrame(() => button?.focus());
+  }
   const openedLink = useRef("");
   const divisionTeams = league.teams.filter(team => team.division === division);
   const configuredSizes = league.seasons.find(s => s.id === divisionTeams[0]?.seasonId)?.groupSizes?.[division];
@@ -821,6 +845,7 @@ function Teams({
   const matchingTeams = divisionTeams.filter(matches);
   const groups = Array.from(new Set(divisionTeams.map(team => team.group).filter(group => group !== "Unassigned"))).sort();
   useEffect(() => {
+    openedLink.current = "";
     setSelected(null);
     setPlayer(null);
     setQuery("");
@@ -834,7 +859,10 @@ function Teams({
   }, [division, initialTeam, league.teams]);
   useEffect(() => {
     if (!selected) return;
-    const frame = requestAnimationFrame(() => rosterRef.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" }));
+    const frame = requestAnimationFrame(() => {
+      rosterRef.current?.focus({ preventScroll: true });
+      rosterRef.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    });
     return () => cancelAnimationFrame(frame);
   }, [selected?.id]);
   return (
@@ -852,15 +880,15 @@ function Teams({
       >
         <Divisions value={division} onChange={setDivision} />
       </PageHeading>
-      <div className="team-directory-summary"><strong>{divisionLabel(division)} division</strong><span>{divisionTeams.length} of {slotCount} team slots filled</span></div>
+      <div className="team-directory-overview"><div><span className="eyebrow">FIND YOUR TEAM</span><h2>{divisionLabel(division)} division</h2><p>Explore the rosters. Follow your favorites.</p></div><div className="team-directory-counts"><span><b>{divisionTeams.length}</b> Teams</span><span><b>{league.players.filter(player => divisionTeams.some(team => team.id === player.teamId)).length}</b> Players</span><span><b>{groups.length}</b> Groups</span></div></div>
       <div className="team-directory-toolbar">
         <label className="team-search"><Search size={19} aria-hidden="true" /><input aria-label="Search teams, coaches or players" type="search" placeholder="Search teams, coaches or players…" value={query} onChange={event => setQuery(event.target.value)} /></label>
         <div className="team-group-filters" role="group" aria-label="Filter teams by group">
           {["All", ...groups].map(group => <button key={group} type="button" aria-pressed={groupFilter === group} onClick={() => setGroupFilter(group)}>{group === "All" ? "All teams" : `Group ${group}`}</button>)}
         </div>
       </div>
-      {filtering && <p className="team-search-results" role="status">{matchingTeams.length} {matchingTeams.length === 1 ? "team" : "teams"} found <button onClick={() => { setQuery(""); setGroupFilter("All"); }}>Clear filters</button></p>}
-      <div className="team-grid">
+      <div className="team-directory-viewbar"><p className="team-search-results" role="status">{matchingTeams.length} {matchingTeams.length === 1 ? "team" : "teams"}{filtering ? " found" : " to discover"}{filtering && <button onClick={() => { setQuery(""); setGroupFilter("All"); }}>Clear filters</button>}</p><div className="team-view-switch" role="group" aria-label="Team directory view"><button type="button" aria-label="Grid view" aria-pressed={directoryView === "grid"} onClick={() => chooseDirectoryView("grid")}><LayoutGrid size={16} />Grid</button><button type="button" aria-label="List view" aria-pressed={directoryView === "list"} onClick={() => chooseDirectoryView("list")}><List size={17} />List</button></div></div>
+      <div className={`team-grid ${directoryView === "list" ? "team-list" : ""}`}>
         {slots.map((t, index) => t ? (!matches(t) ? null : (
             <button
               className={`team-profile-card ${selected?.id === t.id ? "selected" : ""}`}
@@ -870,6 +898,7 @@ function Teams({
                 setPlayer(null);
               }}
               key={t.id}
+              ref={node => { if (node) teamButtons.current.set(t.id, node); else teamButtons.current.delete(t.id); }}
               data-slot={index + 1}
             >
               <span className="team-logo-box">
@@ -887,8 +916,8 @@ function Teams({
       </div>
       {filtering && matchingTeams.length === 0 && <Empty title="No teams found" description="Try another team, coach or player name, or clear the group filter." />}
       {selected && (
-        <section id="team-roster" className="panel roster-panel" ref={rosterRef} aria-label={`${selected.name} roster`}>
-          <button className="roster-close" aria-label="Close team roster" onClick={() => { setSelected(null); setPlayer(null); }}><X size={20} /></button>
+        <section id="team-roster" className="panel roster-panel" ref={rosterRef} tabIndex={-1} aria-label={`${selected.name} roster`}>
+          <button className="roster-close" aria-label="Close team roster" onClick={closeRoster}><X size={20} /></button>
           <SectionTitle
             title={selected.name}
             subtitle={`${divisionLabel(selected.division)} · ${selected.group === "Unassigned" ? "Group draw pending" : `Group ${selected.group}`}${selected.coach ? ` · Head coach: ${selected.coach}` : ""}${selected.assistantCoach ? ` · Assistant coach: ${selected.assistantCoach}` : ""}`}

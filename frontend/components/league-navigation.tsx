@@ -57,6 +57,7 @@ export default function LeagueNavigation({ user, onLogout }: { user: User | null
   }, [open, mobile]);
   const signOut = async () => { await api("/auth/logout", {}); onLogout(); setOpen(false); setMobile(false); };
   return (
+    <>
     <header className={`league-header ${scrolled ? "is-scrolled" : ""}`} ref={container}>
       <div className="league-header-inner">
         <Link className="league-brand" href="/" aria-label="HHC BASKETBALL LEAGUE">
@@ -90,5 +91,9 @@ export default function LeagueNavigation({ user, onLogout }: { user: User | null
         {user && <button onClick={signOut}><LogIn size={19} />Sign out</button>}
       </nav>}
     </header>
+    <nav className="league-bottom-nav" aria-label="Quick navigation">
+      {[primary[0], primary[1], primary[3], primary[4], primary[5]].map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? "page" : undefined}><item.icon size={20} strokeWidth={1.8} aria-hidden="true" /><span>{item.href === "/standings" ? "Standings" : item.label}</span></Link>)}
+    </nav>
+    </>
   );
 }

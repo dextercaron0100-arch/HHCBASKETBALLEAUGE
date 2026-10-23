@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { divisionLabel } from "@/lib/divisions";
 
 import { useEffect, useRef, useState } from "react";
@@ -449,9 +450,9 @@ export default function Schedule({
                 <ChevronRight size={16} />
               </button>
             )}
-            <button className="button button-outline" onClick={reset}>
+            {!league.games.length ? <><Link className="button button-primary" href="/teams">Find your team <ChevronRight size={16} /></Link><Link className="button button-outline" href="/playoffs">Explore the playoffs</Link></> : <button className="button button-outline" onClick={reset}>
               View all games
-            </button>
+            </button>}
           </div>
         </div>
       )}

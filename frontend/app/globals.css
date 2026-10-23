@@ -3073,3 +3073,91 @@ a.postseason-match:hover { border-color: var(--gold); background: #223347; }
  .postseason-team > span:not(.team-mark):not(.postseason-team-placeholder) { display: block; overflow: visible; overflow-wrap: anywhere; }
  .postseason-footer { padding: 16px 18px; }
 }
+
+/* Fan navigation, compact team browsing, and readable standings. */
+.league-bottom-nav { display: none; }
+.team-directory-overview { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px; border: 1px solid #ffffff18; border-radius: 18px; background: radial-gradient(ellipse at 0 0, #f4c64e0d, transparent 65%), #14212ef5; }
+.team-directory-overview h2 { margin: 10px 0 7px; font-size: 27px; font-weight: 700; letter-spacing: -.7px; }
+.team-directory-overview p { color: #a5b7cb; font-size: 13px; line-height: 1.6; }
+.team-directory-counts { display: flex; gap: 30px; }
+.team-directory-counts > span { display: flex; flex-direction: column; gap: 6px; color: #a5b7cb; font-size: 12px; }
+.team-directory-counts > span + span { border-left: 1px solid #ffffff16; padding-left: 30px; }
+.team-directory-counts b { font-size: 30px; line-height: 1; font-weight: 750; color: #f2f5fa; font-variant-numeric: tabular-nums; }
+.team-directory-counts > span:first-child b { color: var(--gold); }
+.team-directory-toolbar { padding: 18px; margin: 18px 0 0; border: 1px solid #ffffff12; border-radius: 14px; background: #111c28ed; }
+.team-directory-viewbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0; }
+.team-directory-viewbar .team-search-results { flex-wrap: wrap; justify-content: flex-start; margin: 0; padding: 0; background: transparent; font-size: 12px; color: #a5b7cb; gap: 4px 12px; }
+.team-directory-viewbar .team-search-results button { padding: 5px 0; font-size: 12px; min-height: 32px; }
+.team-view-switch { display: flex; flex-shrink: 0; padding: 4px; gap: 3px; border: 1px solid #ffffff18; border-radius: 10px; background: #14202b; }
+.team-view-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 7px 11px; border: 0; border-radius: 6px; background: transparent; color: #a7b9cc; font-size: 12px; cursor: pointer; }
+.team-view-switch button[aria-pressed="true"] { background: #f4c64e18; color: var(--gold); }
+.team-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.team-list .team-profile-card { display: flex; flex-direction: row; align-items: center; gap: 18px; padding: 18px; border-radius: 14px; }
+.team-list .team-logo-box { width: 88px; height: 88px; flex-shrink: 0; border-radius: 12px; }
+.team-list .team-profile-details { flex: 1; min-width: 0; padding: 0; }
+.team-list .team-profile-details h3 { margin: 7px 0; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
+.team-list .team-profile-details p { margin: 0 0 8px; font-size: 12px; }
+.team-list .team-card-kicker { font-size: 9px; letter-spacing: .5px; }
+.team-list .team-profile-details .text-link { margin-top: 4px; font-size: 12px; }
+.team-list .team-logo-box .team-mark.large { font-size: 30px; }
+.team-profile-card { transition: border-color .18s, box-shadow .18s; }
+.team-profile-card:focus-visible, .team-view-switch button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.roster-panel:focus { outline: none; }
+.roster-panel:focus-visible { outline: 2px solid #f4c64e70; outline-offset: 4px; }
+.standings-table-wrap { border: 1px solid #ffffff10; }
+.standings-table-wrap th { background: #111e2b; white-space: nowrap; }
+.standings-table-wrap td { background: #18212c; font-variant-numeric: tabular-nums; }
+.standings-table-wrap th:nth-child(2), .standings-table-wrap td:nth-child(2) { position: sticky; left: 0; z-index: 1; }
+.standings-table-wrap td:nth-child(2) { box-shadow: 8px 0 12px -12px #000; }
+.standings-table-wrap .table-team { min-width: 170px; max-width: 250px; min-height: 40px; color: #e0e8f3; font-weight: 600; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+.standings-table-wrap.is-compact .table-team { min-width: 120px; }
+.standings-table-wrap .table-team:hover { color: var(--gold); }
+.standings-table-wrap .table-team .team-mark { flex-shrink: 0; }
+.standings-table-wrap tr:hover td { background: #1e2c3a; }
+.standings-key { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 16px 0; font-size: 11px; color: #91a7bf; }
+.standings-key b { color: #c0cede; font-weight: 600; margin-right: 5px; }
+.standings-loading { padding: 24px 18px; color: #a8bbd0; font-size: 12px; display: flex; align-items: center; gap: 12px; }
+.standings-loading-bar { width: 32px; height: 4px; border-radius: 8px; background: var(--gold); animation: standings-pulse 1s ease-in-out infinite alternate; }
+@keyframes standings-pulse { to { opacity: .3; } }
+.schedule-no-games { border: 1px solid #ffffff16; border-radius: 18px; background: radial-gradient(ellipse at 50% 0, #f4c64e0c, transparent 65%), #14202c; padding: 32px 24px; }
+.schedule-no-games .empty-state { border: 0; background: none; padding: 8px 12px 24px; }
+.schedule-no-games .empty-state > svg { color: var(--gold); width: 48px; height: 48px; padding: 10px; border: 1px solid #f4c64e40; border-radius: 14px; background: #f4c64e09; }
+.schedule-no-games .empty-state p { max-width: 440px; margin-inline: auto; }
+.schedule-no-games .button-row { flex-wrap: wrap; justify-content: center; margin: 0; }
+@media (max-width: 1000px) { .team-list { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+ .league-bottom-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; padding: 6px max(8px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid #ffffff18; background: #111c29f5; backdrop-filter: blur(18px); box-shadow: 0 -8px 28px #0002; }
+ .league-bottom-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 52px; padding: 6px 2px; border-radius: 10px; color: #9db0c7; font-size: 10px; font-weight: 550; }
+ .league-bottom-nav a[aria-current="page"] { background: #f4c64e10; color: var(--gold); }
+ .league-bottom-nav a:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+ .horizontal-layout { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+ html { scroll-padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+ .team-directory-overview { gap: 14px; padding: 20px 16px; }
+ .team-directory-overview > div:first-child { flex: 1; min-width: 0; }
+ .team-directory-overview h2 { margin: 0; font-size: 18px; line-height: 1.4; }
+ .team-directory-overview p, .team-directory-overview .eyebrow { display: none; }
+ .team-directory-counts { gap: 12px; }
+ .team-directory-counts > span { font-size: 10px; }
+ .team-directory-counts > span + span { padding-left: 12px; }
+ .team-directory-counts b { font-size: 22px; }
+ .team-directory-toolbar { padding: 12px; gap: 12px; }
+ .team-search input { font-size: 16px; }
+ .team-group-filters { gap: 6px; }
+ .team-group-filters button { padding: 9px 11px; font-size: 11px; }
+ .team-view-switch button { min-height: 40px; padding-inline: 9px; font-size: 11px; }
+ .team-list .team-profile-card { gap: 14px; padding: 14px; }
+ .team-list .team-logo-box { width: 70px; height: 70px; border-radius: 10px; }
+ .team-list .team-profile-details h3 { font-size: 16px; }
+ .team-list .team-profile-details p { font-size: 11px; }
+ .team-list .team-card-kicker { font-size: 8px; }
+ .team-list .team-card-kicker > span { padding-inline: 2px; }
+ .roster-close { width: 44px; height: 44px; }
+ .standings-table-wrap .table-team { min-width: 130px; max-width: 175px; font-size: 12px; }
+ .standings-key { font-size: 10px; gap: 8px 14px; }
+ .division-standings .section-title { flex-wrap: wrap; gap: 12px; }
+ .division-standings .tabs { width: 100%; }
+ .division-standings .tabs button { flex: 1; padding-inline: 6px; white-space: nowrap; font-size: 12px; }
+ .schedule-no-games { padding: 28px 14px; }
+ .schedule-no-games .button-row > * { flex: 1 1 190px; text-align: center; justify-content: center; min-height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) { .standings-loading-bar { animation: none; } }
