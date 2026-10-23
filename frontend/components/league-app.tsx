@@ -136,7 +136,7 @@ export default function LeagueApp({ initialDivision = "Junior", initialTeam = ""
       }
     : null;
   return (
-    <div className={`app-shell horizontal-layout ${path === "/" ? "home-court-background" : ""}`}>
+    <div className="app-shell horizontal-layout section-backgrounds" data-page={path}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>

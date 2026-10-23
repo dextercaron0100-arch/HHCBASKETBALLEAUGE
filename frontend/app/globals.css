@@ -3161,3 +3161,45 @@ a.postseason-match:hover { border-color: var(--gold); background: #223347; }
  .schedule-no-games .button-row > * { flex: 1 1 190px; text-align: center; justify-content: center; min-height: 46px; }
 }
 @media (prefers-reduced-motion: reduce) { .standings-loading-bar { animation: none; } }
+
+/* Lightweight basketball backgrounds across the league's pages and sections. */
+.section-backgrounds {
+ --section-art: url('/images/section-court.svg');
+ --section-glow: #e9bf610c;
+ background-image: linear-gradient(180deg, #0d172044, #0d172022), url('/images/section-court.svg');
+ background-size: 100% 100%, 1440px auto;
+ background-position: center top;
+ background-repeat: no-repeat, repeat-y;
+}
+.section-backgrounds[data-page="/teams"], .section-backgrounds[data-page="/manager"] { --section-art: url('/images/section-basketball.svg'); --section-glow: #e9a2590e; }
+.section-backgrounds[data-page="/news"], .section-backgrounds[data-page="/statistics"], .section-backgrounds[data-page="/admin"] { --section-art: url('/images/section-arena.svg'); --section-glow: #77b8f410; }
+.section-backgrounds :where(.panel, .draw-stage, .postseason-panel, .schedule-browser, .schedule-no-games, .schedule-day-group, .team-directory-overview, .team-directory-toolbar, .fan-intro, .fan-team, .metric, .game-card, .scoreboard, .empty-state, .team-profile-card, .league-shortcuts > a) {
+ background-image: linear-gradient(110deg, #101a2799, transparent 80%), radial-gradient(ellipse at top right, var(--section-glow), transparent 70%), var(--section-art);
+ background-size: cover, cover, auto 100%;
+ background-position: center, center, right center;
+ background-repeat: no-repeat;
+}
+.section-backgrounds :where(.page-heading, .overview-heading) {
+ padding: 26px 28px;
+ border: 1px solid #ffffff16;
+ border-radius: 18px;
+ background: linear-gradient(100deg, #142130f2, #111d2ad9), var(--section-art) right center / auto 180% no-repeat;
+ box-shadow: 0 12px 32px #00000012;
+}
+.section-backgrounds .main-content > section:not([class]) {
+ padding: 24px;
+ border: 1px solid #ffffff12;
+ border-radius: 18px;
+ background: linear-gradient(110deg, #152130ed, #15213099), var(--section-art) right center / auto 100% no-repeat;
+}
+.section-backgrounds :where(.community-panel, .fan-intro, .metric:nth-child(odd)) { --section-art: url('/images/section-basketball.svg'); }
+.section-backgrounds :where(.news-card, .award-card) { --section-art: url('/images/section-arena.svg'); }
+.section-backgrounds :where(.draw-stage, .postseason-panel, .scoreboard) { background-size: cover, cover, auto 680px; background-position: center, center, right top; }
+/* A selected team's full-page logo remains the primary background. */
+body:has(> .selected-team-background) .section-backgrounds { background-image: none; }
+@media (max-width: 760px) {
+ .section-backgrounds { background-size: 100% 100%, auto 800px; }
+ .section-backgrounds :where(.page-heading, .overview-heading) { padding: 22px 18px; border-radius: 15px; gap: 20px; }
+ .section-backgrounds .main-content > section:not([class]) { padding: 20px 16px; }
+ .section-backgrounds :where(.panel, .draw-stage, .postseason-panel, .schedule-browser) { background-size: cover, cover, auto 540px; background-position: center, center, right top; }
+}
