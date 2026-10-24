@@ -1252,26 +1252,32 @@ function Live({ league }: { league: League }) {
   const [selected, setSelected] = useState("");
   const [game, setGame] = useState<Game | null>(null);
   const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [boxTeam, setBoxTeam] = useState("All");
+  const availableGames = league.games.filter(g => g.status !== "Cancelled").sort((a, b) => Number(b.status === "Live") - Number(a.status === "Live") || (b.start || "").localeCompare(a.start || ""));
   useEffect(() => {
     const param = new URLSearchParams(window.location.search).get("game");
-    setSelected(
-      param ||
-        league.games.find((g) => g.status === "Live")?.id ||
-        league.games[0]?.id ||
-        "",
-    );
-  }, []);
+    setSelected(current => availableGames.some(g => g.id === current) ? current : availableGames.find(g => g.id === param)?.id || availableGames[0]?.id || "");
+  }, [league.games]);
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;
+    setGame(null);
+    setLoading(true);
+    setLoadError("");
+    setConnected(false);
+    setBoxTeam("All");
     const load = () =>
       api<Game>(`/games/${selected}`)
         .then((g) => {
           if (!cancelled) {
             setGame(g);
+            setLoadError("");
           }
         })
-        .catch(() => setConnected(false));
+        .catch(() => { if (!cancelled) setLoadError("Game updates are unavailable. Retrying automatically every 10 seconds."); })
+        .finally(() => { if (!cancelled) setLoading(false); });
     load();
     const connection = new HubConnectionBuilder()
       .withUrl(hubUrl)
@@ -1279,20 +1285,20 @@ function Live({ league }: { league: League }) {
       .configureLogging(LogLevel.Error)
       .build();
     connection.on("GameChanged", (g: Game) => {
-      setGame(g);
+      if (!cancelled && g.id === selected) { setGame(g); setLoading(false); setLoadError(""); }
     });
     connection.onreconnecting(() => setConnected(false));
     connection.onclose(() => setConnected(false));
     connection.onreconnected(async () => {
       await connection.invoke("Watch", selected);
-      setConnected(true);
+      if (!cancelled) setConnected(true);
       load();
     });
     connection
       .start()
       .then(async () => {
         await connection.invoke("Watch", selected);
-        setConnected(true);
+        if (!cancelled) setConnected(true);
       })
       .catch(() => setConnected(false));
     const poll = setInterval(load, 10000);
@@ -1305,21 +1311,25 @@ function Live({ league }: { league: League }) {
   const seconds = useGameClock(game);
   const home = league.teams.find((t) => t.id === game?.homeId);
   const away = league.teams.find((t) => t.id === game?.awayId);
+  const scored = game && ["Live", "Final", "Confirmed"].includes(game.status);
+  const finished = game && ["Final", "Confirmed"].includes(game.status);
+  const scoreMessage = !game ? "" : game.status === "Scheduled" ? "Waiting for tip-off" : game.homeScore === game.awayScore ? "Scores are level" : `${game.homeScore > game.awayScore ? home?.name : away?.name} ${finished ? "win by" : "lead by"} ${Math.abs(game.homeScore - game.awayScore)}`;
   return (
-    <>
+    <div className="live-page">
       <PageHeading
         eyebrow="FOLLOW EVERY BASKET"
         title="Live scoreboard"
         description="A courtside view, wherever you are."
       />
-      <div className="filter-bar">
+      {availableGames.length > 0 && <div className="filter-bar live-game-picker">
         <label>
           Game
           <select
+            aria-label="Choose scoreboard game"
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
           >
-            {league.games.map((g) => (
+            {availableGames.map((g) => (
               <option value={g.id} key={g.id}>
                 {divisionLabel(g.division)} ·{" "}
                 {league.teams.find((t) => t.id === g.homeId)?.name} vs{" "}
@@ -1328,15 +1338,16 @@ function Live({ league }: { league: League }) {
             ))}
           </select>
         </label>
-        <span className={`connection ${connected ? "positive" : "subtle"}`}>
+        <span role="status" className={`connection ${connected ? "positive" : "subtle"}`}>
           {connected
             ? "● Connected live"
-            : "● Reconnecting · scores refresh periodically"}
+            : "● Connecting · automatic refresh every 10s"}
         </span>
-      </div>
+      </div>}
+      {loadError && <p className="notice error" role="alert">{loadError}</p>}
       {game ? (
         <>
-          <div className="scoreboard">
+          <div className="scoreboard live-arena" aria-label="Game scoreboard">
             <div className="scoreboard-top">
               <span>
                 {divisionLabel(game.division)} ·{" "}
@@ -1352,31 +1363,33 @@ function Live({ league }: { league: League }) {
               <div>
                 <TeamMark team={home} size="large" />
                 <h2>{home?.name}</h2>
-                <span>HOME</span>
+                <Link className="scoreboard-team-link" href={`/teams?division=${game.division}&team=${home?.id}#team-roster`}>HOME · View roster <ChevronRight size={12} /></Link>
               </div>
               <div className="scoreboard-center">
                 <div className="big-score">
-                  <strong>{game.homeScore}</strong>
-                  <span>:</span>
-                  <strong>{game.awayScore}</strong>
+                  <strong className={scored && game.homeScore > game.awayScore ? "leading" : ""}>{scored ? game.homeScore : "—"}</strong>
+                  <span>–</span>
+                  <strong className={scored && game.awayScore > game.homeScore ? "leading" : ""}>{scored ? game.awayScore : "—"}</strong>
                 </div>
-                <div className="clock">
+                {game.status === "Live" && <div className="clock">
                   {Math.floor(seconds / 60)
                     .toString()
                     .padStart(2, "0")}
                   :{(seconds % 60).toString().padStart(2, "0")}
-                </div>
-                <span>
+                </div>}
+                {game.status === "Live" && <span>
                   {game.quarter > 4
                     ? `OVERTIME ${game.quarter - 4}`
                     : `QUARTER ${game.quarter}`}{" "}
                   · {game.clockRunning ? "CLOCK RUNNING" : "CLOCK STOPPED"}
-                </span>
+                </span>}
+                <p className="scoreboard-margin" aria-live="polite">{scoreMessage}</p>
+                {finished && <span>{game.status === "Confirmed" ? "Official result" : "Awaiting organizer confirmation"}</span>}
               </div>
               <div>
                 <TeamMark team={away} size="large" />
                 <h2>{away?.name}</h2>
-                <span>AWAY</span>
+                <Link className="scoreboard-team-link" href={`/teams?division=${game.division}&team=${away?.id}#team-roster`}>AWAY · View roster <ChevronRight size={12} /></Link>
               </div>
             </div>
             <div className="scoreboard-bottom">
@@ -1384,7 +1397,7 @@ function Live({ league }: { league: League }) {
                 Team fouls <b>{game.homeFouls}</b> · Timeouts used{" "}
                 <b>{game.homeTimeouts}</b>
               </span>
-              <span>{dateTime(game.start)}</span>
+              <span>{dateTime(game.start, league.seasons.find(s => s.id === game.seasonId)?.timezone)}</span>
               <span>
                 Team fouls <b>{game.awayFouls}</b> · Timeouts used{" "}
                 <b>{game.awayTimeouts}</b>
@@ -1393,15 +1406,13 @@ function Live({ league }: { league: League }) {
           </div>
           <section className="panel">
             <SectionTitle title="Quarter results" />
-            <div className="stat-chips">
+            <div className="quarter-score-grid">
               {game.quarterResults?.map((q) => (
                 <div key={q.quarter}>
                   <span>
                     {q.quarter > 4 ? "OT " + (q.quarter - 4) : "Q" + q.quarter}
                   </span>
-                  <strong>
-                    {q.home} – {q.away}
-                  </strong>
+                  <strong>{q.home}<i>–</i>{q.away}</strong><small>Home · Away</small>
                 </div>
               ))}
             </div>
@@ -1416,6 +1427,9 @@ function Live({ league }: { league: League }) {
               title="Box score"
               subtitle="Live individual performance"
             />
+            <div className="box-team-tabs" role="group" aria-label="Filter box score by team">
+              {[["All", "Both teams"], [game.homeId, home?.name || "Home"], [game.awayId, away?.name || "Away"]].map(([id, name]) => <button type="button" key={id} aria-pressed={boxTeam === id} onClick={() => setBoxTeam(id)}>{name}</button>)}
+            </div>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -1435,7 +1449,7 @@ function Live({ league }: { league: League }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {game.roster.map((id) => {
+                  {game.roster.filter(id => boxTeam === "All" || (game.rosterSnapshots?.find(p => p.playerId === id)?.teamId || league.players.find(p => p.id === id)?.teamId) === boxTeam).map((id) => {
                     const p =
                       game.rosterSnapshots?.find((p) => p.playerId === id) ||
                       league.players.find((p) => p.id === id);
@@ -1468,12 +1482,9 @@ function Live({ league }: { league: League }) {
           </section>
         </>
       ) : (
-        <Empty
-          title="No game selected"
-          description="Choose a game to follow its scoreboard."
-        />
+        loading ? <div className="live-loading" role="status">Loading the scoreboard…</div> : <section className="live-waiting" aria-label="Courtside updates"><span className="live-waiting-icon"><Radio size={36} /></span><span className="eyebrow">YOUR COURTSIDE SEAT</span><h2>{availableGames.length ? "Waiting for game details" : "The court is quiet. Stay ready."}</h2><p>{availableGames.length ? "Game details will appear when the connection is restored." : "Live scores, the game clock, and player stats will appear here when scorekeeping begins."}</p><div className="live-waiting-features"><span><Activity size={17} />Live scores</span><span><CircleDot size={17} />Quarter by quarter</span><span><Users size={17} />Player stats</span></div><div className="button-row"><Link href="/schedule" className="button button-primary">View the schedule <ArrowRight size={16} /></Link><Link href="/teams" className="button button-outline">Explore the teams</Link></div></section>
       )}
-    </>
+    </div>
   );
 }
 function Login({ onLogin, user }: { onLogin: () => void; user: User | null }) {
