@@ -218,11 +218,24 @@ export default function Admin({
                 },
                 {
                   name: "timeoutLimit",
-                  label: "Timeouts per team / game",
+                  label: "Timeouts per team",
                   type: "number",
                   value: season?.timeoutLimit,
                   required: true,
                   min: 1,
+                },
+                {
+                  name: "timeoutPeriod",
+                  label: "Timeout allowance applies per",
+                  value: season?.timeoutPeriod || "Game",
+                  options: [{ value: "Game", label: "Game" }, { value: "Half", label: "Half (reset before Q3)" }],
+                },
+                {
+                  name: "overtimeTimeoutLimit",
+                  label: "Timeouts per overtime (blank keeps unused allowance)",
+                  type: "number",
+                  value: season?.overtimeTimeoutLimit ?? "",
+                  min: 0,
                 },
                 {
                   name: "quarterSeconds",
@@ -263,6 +276,8 @@ export default function Admin({
                   seniorMax: Number(v.seniorMax),
                   foulLimit: Number(v.foulLimit),
                   timeoutLimit: Number(v.timeoutLimit),
+                  timeoutPeriod: v.timeoutPeriod,
+                  overtimeTimeoutLimit: v.overtimeTimeoutLimit === "" ? null : Number(v.overtimeTimeoutLimit),
                   quarterSeconds: Number(v.quarterSeconds),
                   overtimeSeconds: Number(v.overtimeSeconds),
                   registrationOpen: v.registrationOpen === "true",
@@ -610,9 +625,11 @@ export default function Admin({
                     {g.homeScore} – {g.awayScore}{" "}
                     {state.teams.find((t) => t.id === g.awayId)?.name}
                   </span>
+                  {!g.resultApproved && <Button variant="outline" onClick={() => act({ action: "approveResult", id: g.id, reason: "Organizer approved the team result; player statistics may be completed separately." })}>Approve score · stats later</Button>}
                   <Button onClick={() => act({ action: "confirm", id: g.id })}>
-                    Confirm result
+                    Confirm result and stats
                   </Button>
+                  {g.resultApproved && <small>Counted in standings · player stats pending</small>}
                 </div>
               ))}
             {!state.games.some(
@@ -704,7 +721,7 @@ export default function Admin({
         <section className="panel">
           <h2>Rankings & tie decisions</h2>
           <p>
-            Standings derive from confirmed scores. Organizer decisions resolve
+            Standings derive from approved team results. Organizer decisions resolve
             remaining ties and are recorded in the audit log.
           </p>
           <Button asChild variant="outline">

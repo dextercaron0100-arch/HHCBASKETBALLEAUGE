@@ -32,6 +32,8 @@ public class Season
     public int OvertimeSeconds { get; set; } = 300;
     public int? FoulLimit { get; set; }
     public int? TimeoutLimit { get; set; }
+    public string TimeoutPeriod { get; set; } = "Game";
+    public int? OvertimeTimeoutLimit { get; set; }
     public int RestMinutes { get; set; } = 120;
     public int SlotMinutes { get; set; } = 60;
     public string Timezone { get; set; } = "Asia/Manila";
@@ -42,7 +44,7 @@ public class Season
     public Dictionary<string, List<string>> TieDecisions { get; set; } = [];
     public Dictionary<string, List<int>> GroupSizes { get; set; } = [];
 }
-public record Session(int StartHour, int EndHour);
+public record Session(int StartHour, int EndHour, int StartMinute = 0, int EndMinute = 0);
 public record Court(string Id, string Venue, string Name);
 public record Closure(string CourtId, DateTimeOffset Start, DateTimeOffset End);
 public class Team
@@ -86,8 +88,10 @@ public class Game
     public string HomeId { get; set; } = "";
     public string AwayId { get; set; } = "";
     public DateTimeOffset? Start { get; set; }
+    public int? DurationMinutes { get; set; }
     public string CourtId { get; set; } = "";
     public string Status { get; set; } = "Scheduled";
+    public bool ResultApproved { get; set; }
     public int HomeScore { get; set; }
     public int AwayScore { get; set; }
     public int Quarter { get; set; } = 1;
@@ -104,6 +108,8 @@ public class Game
     public string LeaseOwner { get; set; } = "";
     public DateTimeOffset? LeaseUntil { get; set; }
     public List<string> Roster { get; set; } = [];
+    public List<string> OnCourt { get; set; } = [];
+    public List<string> StartingFive { get; set; } = [];
     public List<RosterSnapshot> RosterSnapshots { get; set; } = [];
     public List<ScoreEvent> Events { get; set; } = [];
     public Dictionary<string, PlayerStats> Stats { get; set; } = [];

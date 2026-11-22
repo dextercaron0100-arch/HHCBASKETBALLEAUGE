@@ -1,42 +1,24 @@
 import { test, expect } from "@playwright/test";
 
-test("empty bracket shows crossover paths, formats, divisions and mobile scrolling", async ({ page }) => {
+test("standings draw switches divisions, selects groups and opens the playoff bracket", async ({ page, request }) => {
+  const league = await (await request.get("/api/v1/public")).json();
   await page.goto("/standings");
-  const bracket = page.locator(".playoff-panel");
-  await expect(bracket.locator(".playoff-match")).toHaveCount(8);
-  await expect(bracket.locator(".playoff-team-slot strong")).toHaveText(Array(16).fill("To be assigned"));
-  await expect(bracket.locator(".playoff-summary")).toContainText("38");
-  await expect(bracket.locator(".playoff-summary")).toContainText("76");
-  const quarterfinal = bracket.getByRole("button", { name: /Junior Quarterfinal 1:/ });
-  await quarterfinal.focus();
-  await page.keyboard.press("Enter");
-  await expect(quarterfinal).toHaveAttribute("aria-pressed", "true");
-  await expect(bracket.locator(".playoff-match.on-path")).toHaveCount(3);
-  await expect(bracket.locator("path.highlighted")).toHaveCount(2);
-  await expect(bracket.locator(".playoff-detail")).toContainText("A1 vs B4");
-  await page.screenshot({ path: "test-results/bracket-desktop.png", fullPage: true });
-  const selector = page.getByLabel("Bracket format", { exact: true });
-  for (const [format, perDivision, total, cards] of [
-    ["three-top-one", 16, 32, 8],
-    ["three-top-two", 20, 40, 12],
-    ["elimination", 12, 24, 16],
-  ] as const) {
-    await selector.selectOption(format);
-    await expect(bracket.locator(".playoff-summary strong")).toHaveText([String(perDivision), String(total)]);
-    await expect(bracket.locator(".playoff-match")).toHaveCount(cards);
-    await expect(bracket.locator(".playoff-match.selected")).toHaveCount(0);
+  for (const [division, label] of [["Junior", "Junior"], ["Senior", "Open"]]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    const bracket = page.getByRole("region", { name: `${label} division brackets`, exact: true });
+    const sizes = league.seasons[0].groupSizes[division];
+    await expect(bracket.locator(".draw-pool")).toHaveCount(sizes.length);
+    for (let index = 0; index < sizes.length; index++) {
+      const group = String.fromCharCode(65 + index);
+      const pool = bracket.getByRole("article", { name: `Group ${group}`, exact: true });
+      await expect(pool.locator(".draw-pool-teams li")).toHaveCount(sizes[index]);
+    }
+    await bracket.getByRole("button", { name: "View Group B standings", exact: true }).click();
+    await expect(page.locator("#division-standings .tabs button.active")).toHaveText("Group B");
   }
-  await expect(bracket.locator(".playoff-match.bye")).toHaveCount(4);
-  await bracket.getByRole("button", { name: /Junior Third place:/ }).click();
-  await expect(bracket.locator(".playoff-detail")).toContainText("Semifinal losers compete for third place");
-  await expect(bracket.locator("path.highlighted")).toHaveCount(0);
-  await page.getByRole("button", { name: "Open", exact: true }).click();
-  await expect(bracket.locator(".playoff-heading")).toContainText("Open division");
-  await expect(selector).toHaveValue("six-top-four");
   await page.setViewportSize({ width: 390, height: 844 });
-  await bracket.scrollIntoViewIfNeeded();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await bracket.locator(".playoff-scroll").evaluate(element => { element.scrollLeft = 440; });
-  expect(await bracket.locator(".playoff-scroll").evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
-  await page.screenshot({ path: "test-results/bracket-mobile.png" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto("/playoffs?division=Senior");
+  await expect(page.getByRole("region", { name: "Open playoff bracket", exact: true })).toBeVisible();
+  await expect(page.locator(".postseason-match")).toHaveCount(12);
 });

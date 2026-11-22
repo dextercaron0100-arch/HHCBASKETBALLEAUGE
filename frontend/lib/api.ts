@@ -1,8 +1,9 @@
-let token = "";
 export const hubUrl = process.env.NEXT_PUBLIC_REALTIME_URL || "/hubs/games";
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  let token = "";
   if (body !== undefined) {
     const response = await fetch("/api/v1/auth/csrf", {
+      signal,
       credentials: "include",
       cache: "no-store",
     });
@@ -10,6 +11,7 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     token = (await response.json()).token;
   }
   const response = await fetch(`/api/v1${path}`, {
+    signal,
     credentials: "include",
     cache: "no-store",
     method: body === undefined ? "GET" : "POST",
@@ -22,12 +24,15 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(
-      data.error ||
+      (typeof data?.error === "string" && data.error) ||
         (response.status === 401 ? "Please sign in." : "Request failed."),
     );
   }
-  if (response.headers.get("content-length") === "0") return undefined as T;
-  return response.json().catch(() => undefined);
+  if (response.status === 204 || response.status === 205) return undefined as T;
+  const text = await response.text();
+  if (!text.trim()) return undefined as T;
+  try { return JSON.parse(text) as T; }
+  catch { throw new Error("The server returned an invalid response. Please retry."); }
 }
 export async function upload(
   file: File,

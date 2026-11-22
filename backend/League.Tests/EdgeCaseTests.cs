@@ -56,6 +56,9 @@ public class EdgeCaseTests
     {
         var state=new LeagueState();Demo.Seed(state);var game=state.Games.First(g=>g.Status=="Scheduled");var player=state.Players.First(p=>p.TeamId==game.HomeId);
         state.Discipline.Add(new(){PlayerId=player.Id,GameIds=[game.Id],Reason="Fictional suspension"});var now=DateTimeOffset.UtcNow;Scoring.Lease(game,"scorer:tablet",now);
+        var available=state.Players.Where(p=>p.Id!=player.Id&&(p.TeamId==game.HomeId||p.TeamId==game.AwayId)).ToList();
+        var starters=available.GroupBy(p=>p.TeamId).SelectMany(g=>g.Take(5)).Select(p=>p.Id).ToList();
+        Scoring.Apply(state,game,new("lineup",game.Version,"tablet","lineup","","",0,"","",available.Select(p=>p.Id).ToList(),starters),"scorer",now);
         Scoring.Apply(state,game,new("start",game.Version,"tablet","start","","",0,""),"scorer",now);
         Assert.DoesNotContain(player.Id,game.Roster);var snapshot=game.RosterSnapshots[0];state.Players.Single(p=>p.Id==snapshot.PlayerId).Number=99;Assert.NotEqual(99,snapshot.Number);
     }

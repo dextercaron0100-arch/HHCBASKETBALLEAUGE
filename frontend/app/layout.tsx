@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
+import "./theme.css";
+import "./player-profile.css";
+import { themeInitializationScript } from "@/lib/theme";
 export const metadata: Metadata = {
   title: "HHC BASKETBALL LEAGUE · Every game. One community.",
   description:
@@ -19,7 +22,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: themeInitializationScript }} /></head>
       <body>
         {children}
         <Analytics />

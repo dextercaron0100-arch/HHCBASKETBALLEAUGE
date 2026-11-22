@@ -16,10 +16,11 @@ public static class Commands
                 var season = body.Read<Season>("season");
                 ValidateCalendar(season);
                 if (new int?[]{season.JuniorMin,season.JuniorMax,season.SeniorMin,season.SeniorMax}.Any(age => age is < 0 or > 120) || season.JuniorMin > season.JuniorMax || season.SeniorMin > season.SeniorMax) throw new RuleException("Age ranges must be ordered and between 0 and 120.");
-                if (string.IsNullOrWhiteSpace(season.Name) || season.QuarterSeconds < 60 || season.OvertimeSeconds < 60 || season.SlotMinutes < 15 || season.RestMinutes < 0 || season.Courts.Count == 0 || season.Courts.Select(c => c.Id).Distinct().Count() != season.Courts.Count || season.Sessions.Count == 0 || season.Sessions.Any(s => s.StartHour < 0 || s.EndHour > 24 || s.StartHour >= s.EndHour) || season.Days.Count == 0 || season.Days.Any(d => d < 0 || d > 6)) throw new RuleException("Invalid league/calendar settings.");
+                if (string.IsNullOrWhiteSpace(season.Name) || season.QuarterSeconds < 60 || season.OvertimeSeconds < 60 || season.SlotMinutes < 15 || season.RestMinutes < 0 || season.Courts.Count == 0 || season.Courts.Select(c => c.Id).Distinct().Count() != season.Courts.Count || season.Sessions.Count == 0 || season.Sessions.Any(s => !Scheduling.ValidSession(s)) || season.Days.Count == 0 || season.Days.Any(d => d < 0 || d > 6)) throw new RuleException("Invalid league/calendar settings.");
                 try { TimeZoneInfo.FindSystemTimeZoneById(season.Timezone); } catch { throw new RuleException("Unknown timezone."); }
                 if (season.RegistrationOpen && (season.AgeCutoff == null || season.JuniorMin == null || season.JuniorMax == null || season.SeniorMin == null || season.SeniorMax == null || season.JuniorMin > season.JuniorMax || season.SeniorMin > season.SeniorMax)) throw new RuleException("Configure age cutoff and division age ranges before opening registration.");
                 if (season.FoulLimit is < 1 || season.TimeoutLimit is < 1) throw new RuleException("Foul and timeout limits must be positive.");
+                if (season.TimeoutPeriod is not ("Game" or "Half") || season.OvertimeTimeoutLimit is < 0) throw new RuleException("Choose timeouts per game or half and a nonnegative overtime limit.");
                 var old = state.Seasons.SingleOrDefault(s => s.Id == season.Id);
                 if (old != null && state.Games.Any(g => g.SeasonId == season.Id && g.Start != null))
                 {
@@ -91,7 +92,7 @@ public static class Commands
             case "preview":
                 var calendar = body.Read<Season>("calendar");
                 ValidateCalendar(calendar);
-                if (!state.Seasons.Any(s => s.Id == calendar.Id) || calendar.SlotMinutes < 15 || calendar.RestMinutes < 0 || calendar.Courts.Count == 0 || calendar.Sessions.Any(s => s.StartHour < 0 || s.EndHour > 24 || s.StartHour >= s.EndHour)) throw new RuleException("Invalid proposed calendar.");
+                if (!state.Seasons.Any(s => s.Id == calendar.Id) || calendar.SlotMinutes < 15 || calendar.RestMinutes < 0 || calendar.Courts.Count == 0 || calendar.Sessions.Any(s => !Scheduling.ValidSession(s))) throw new RuleException("Invalid proposed calendar.");
                 var current = state.Seasons.Single(s => s.Id == calendar.Id);
                 // A calendar preview cannot change eligibility, scoring rules, or tie decisions.
                 current = JsonSerializer.Deserialize<Season>(JsonSerializer.Serialize(current, LeagueStore.Json), LeagueStore.Json)!;
@@ -114,6 +115,7 @@ public static class Commands
                 var official = body.Read<Official>("official"); if (string.IsNullOrWhiteSpace(official.Name)) throw new RuleException("Official name is required.");
                 state.Officials.RemoveAll(o => o.Id == official.Id); state.Officials.Add(official); break;
             case "confirm": Scoring.Confirm(state, state.Games.Single(g => g.Id == id)); break;
+            case "approveResult": Scoring.ApproveResult(state, state.Games.Single(g => g.Id == id), body.Text("reason")); break;
             case "resolveBracketConflict":
                 var abandoned = state.Games.Single(g => g.Id == id);
                 if (abandoned.Stage == "Group" || string.IsNullOrWhiteSpace(body.Text("reason"))) throw new RuleException("Choose a playoff game and provide a resolution reason.");
@@ -163,9 +165,9 @@ public static class Commands
     public static bool ValidStream(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == "https" && ((uri.Host is "www.youtube.com" or "www.youtube-nocookie.com") && uri.AbsolutePath.StartsWith("/embed/") || uri.Host == "www.facebook.com" && uri.AbsolutePath == "/plugins/video.php");
     static void ValidateCalendar(Season calendar)
     {
-        if (calendar.SlotMinutes < 15 || calendar.RestMinutes < 0 || calendar.Days.Count == 0 || calendar.Days.Any(d => d is < 0 or > 6) || calendar.Courts.Count == 0 || calendar.Courts.Select(c => c.Id).Distinct().Count() != calendar.Courts.Count || calendar.Courts.Any(c => string.IsNullOrWhiteSpace(c.Id) || string.IsNullOrWhiteSpace(c.Name) || string.IsNullOrWhiteSpace(c.Venue)) || calendar.Sessions.Count == 0 || calendar.Sessions.Any(s => s.StartHour < 0 || s.EndHour > 24 || s.StartHour >= s.EndHour) || calendar.Closures.Any(c => c.Start >= c.End || !calendar.Courts.Any(x => x.Id == c.CourtId))) throw new RuleException("Invalid calendar settings or closure intervals.");
-        var sessions = calendar.Sessions.OrderBy(s => s.StartHour).ToList();
-        if (sessions.Zip(sessions.Skip(1)).Any(pair => pair.First.EndHour > pair.Second.StartHour)) throw new RuleException("Calendar sessions cannot overlap.");
+        if (calendar.SlotMinutes < 15 || calendar.RestMinutes < 0 || calendar.Days.Count == 0 || calendar.Days.Any(d => d is < 0 or > 6) || calendar.Courts.Count == 0 || calendar.Courts.Select(c => c.Id).Distinct().Count() != calendar.Courts.Count || calendar.Courts.Any(c => string.IsNullOrWhiteSpace(c.Id) || string.IsNullOrWhiteSpace(c.Name) || string.IsNullOrWhiteSpace(c.Venue)) || calendar.Sessions.Count == 0 || calendar.Sessions.Any(s => !Scheduling.ValidSession(s)) || calendar.Closures.Any(c => c.Start >= c.End || !calendar.Courts.Any(x => x.Id == c.CourtId))) throw new RuleException("Invalid calendar settings or closure intervals.");
+        var sessions = calendar.Sessions.OrderBy(Scheduling.SessionStart).ToList();
+        if (sessions.Zip(sessions.Skip(1)).Any(pair => Scheduling.SessionEnd(pair.First) > Scheduling.SessionStart(pair.Second))) throw new RuleException("Calendar sessions cannot overlap.");
         try { TimeZoneInfo.FindSystemTimeZoneById(calendar.Timezone); } catch { throw new RuleException("Unknown calendar timezone."); }
     }
 }

@@ -12,6 +12,8 @@ For a managed backend, set `BACKEND_URL` to its HTTPS URL before building. Insta
 
 For realtime hosting on Vercel, connect SignalR directly to the backend: set `NEXT_PUBLIC_REALTIME_URL=https://api.your-domain.example/hubs/games` before building. Vercel HTTP rewrites are used for REST/cookie traffic, while the backend must independently allow your frontend origin for SignalR. The local `.env` setting `FRONTEND_ORIGINS` accepts comma-separated origins; it includes localhost and the Vercel production address. Keep browser authentication and private REST calls on the frontend's same-origin proxy. The game hub is public/read-only; scoring commands remain authenticated REST calls.
 
+Game reservations may carry `durationMinutes`; otherwise they use the season's `slotMinutes`. Court overlaps, closure checks and team rest use each reservation's full length. Calendar sessions support `startMinute` and `endMinute` (default zero), including a 9:30 PM closing time. Deploy the API before saving variable-duration reservations so older API instances cannot discard these fields. These are scheduling reservations; regulation clock settings are unchanged.
+
 ## Backend and PostgreSQL
 
 Build `infrastructure/Dockerfile.backend` and deploy to a managed service that supports long-lived SignalR WebSockets. Run one backend instance initially; multiple instances require a SignalR backplane such as managed SignalR/Redis and shared Identity data-protection keys. Aggregate concurrency protects database writes but does not distribute realtime broadcasts.
@@ -39,6 +41,24 @@ Terminate HTTPS at the trusted ingress. Configure trusted forwarded headers ther
 The backend applies versioned EF migrations during startup; a separate `dotnet League.Api.dll migrate` job can apply them before rollout. Never use `EnsureCreated` for PostgreSQL. Back up before schema changes; deploy a compatible image only after the migration job succeeds. Create the real administrator by injecting `ADMIN_EMAIL` and `ADMIN_PASSWORD` into a one-off `dotnet League.Api.dll bootstrap-admin` job, then remove those variables. Never seed demo data in production.
 
 ## Operations
+
+Team result approval is separate from player-stat confirmation. In League management, **Approve score · stats later** includes a finished, non-tied game in team standings and playoff qualification without publishing incomplete player statistics. **Confirm result and stats** still requires player points to match team totals before statistics count in player rankings. Approval requires an organizer/administrator and records an audit reason. Approved scores retain `Final` status with `resultApproved: true`; existing `Confirmed` results continue to count normally. The audited CLI equivalent is `dotnet League.Api.dll approve-results <reason> <game-id> [game-id ...]`.
+
+Assigned scorekeepers with control can start a scheduled game at any time, including outside the season calendar's allowed hours. The calendar constrains schedule generation; it does not block game-day scoring. A saved valid lineup and configured court are still required.
+
+Organizers and administrators with scorekeeper control can use **Committee scoresheet → Override finish** when a live game has ended but the tablet quarter or clock is unfinished. A reason is required and is recorded in the audit log and game events. The action stops the clock at zero while retaining the recorded quarter, score, and player statistics. When player point totals match the team scores, the organizer override confirms the result immediately and broadcasts a league refresh so standings and player statistics update. Mismatched totals remain Final awaiting organizer review. Tied scores must be resolved first. This feature requires both the API and frontend updates.
+
+Scoring rules are configured in Organizer dashboard → League management. Select whether the timeout allowance applies per game or per half. Per-half usage carries between Q1/Q2 and Q3/Q4, then resets before Q3 without carrying unused first-half timeouts. An explicit overtime limit resets usage before each overtime; leave it blank to retain the unused allowance. Player foul totals do not reset at halftime.
+
+In the committee scoresheet, **Points quarter** defaults to the live quarter. Select Q1–Q4 (or an overtime period already reached) to enter points from a paper scoresheet, then use the player's +1/+2/+3 controls. The selection also applies to points additions and reductions in Player statistics; other statistics follow the live quarter. Manual points are recorded with the selected quarter and an audit reason without changing the game clock, quarter, fouls, or timeouts. Manual entry can backfill points for a player who has since fouled out. A reduction requires a correction reason and enough recorded points for that player in the chosen quarter. Select **Live quarter** to resume normal entry. Deploy the API before the frontend so the quarter field is honored.
+
+For an existing season with incomplete scoring settings, the backend also supports an audited, targeted repair before any game is live:
+
+```powershell
+docker compose run --rm --no-deps backend configure-scoring <season-id> 5 2 Half <overtime-limit-or-carry>
+```
+
+This updates only the selected season's scoring rules and records the change in its audit log.
 
 ### Public image delivery
 

@@ -1,0 +1,40 @@
+import { test, expect } from "@playwright/test";
+import { createPracticeLeague } from "../lib/practice-scoring";
+import { prepareLineup } from "./helpers/lineup";
+
+test("scorekeeper enforces two timeouts per half and refreshes the allowance at Q3", async ({ page }) => {
+  const league = createPracticeLeague();
+  league.seasons[0].timeoutLimit = 2;
+  league.seasons[0].timeoutPeriod = "Half";
+  await page.addInitScript(league => localStorage.setItem("hhc-scorekeeping-practice-v1", JSON.stringify(league)), league);
+  await page.route("**/api/v1/public", route => route.fulfill({ json: league }));
+  await page.route("**/api/v1/auth/me", route => route.fulfill({ json: { id: "timeout-test", email: "scorer@example.test", roles: ["TeamManager"] } }));
+  await page.route("**/hubs/**", route => route.abort());
+  await page.goto("/scorekeeper?practice=1");
+  await page.getByRole("button", { name: "Acquire control", exact: true }).click();
+  await prepareLineup(page);
+  await page.getByRole("button", { name: "Start game & capture roster", exact: true }).click();
+  const timeout = page.getByRole("button", { name: "Home timeout", exact: true });
+  const counts = page.locator(".scorekeeper-board .scoreboard-bottom");
+  await timeout.click(); await timeout.click();
+  await expect(counts).toContainText("Timeouts this half: 2 / 2");
+  await timeout.click();
+  await expect(page.getByText("This team has used all 2 timeouts for this half.", { exact: true })).toBeVisible();
+  const advance = async (quarter: number) => {
+    await page.getByLabel("Correction reason").fill("Testing the period boundary");
+    await page.getByLabel("Remaining seconds").fill("0");
+    await page.getByRole("button", { name: "Set clock with reason", exact: true }).click();
+    await page.getByRole("button", { name: "Next quarter", exact: true }).click();
+    await expect(page.locator(".scorekeeper-board")).toContainText(`QUARTER ${quarter}`);
+  };
+  await advance(2);
+  await expect(counts).toContainText("Timeouts this half: 2 / 2");
+  await timeout.click();
+  await expect(page.getByText("This team has used all 2 timeouts for this half.", { exact: true })).toBeVisible();
+  await advance(3);
+  await expect(counts).toContainText("Timeouts this half: 0 / 2");
+  await timeout.click(); await timeout.click();
+  await expect(counts).toContainText("Timeouts this half: 2 / 2");
+  await advance(4);
+  await expect(counts).toContainText("Timeouts this half: 2 / 2");
+});

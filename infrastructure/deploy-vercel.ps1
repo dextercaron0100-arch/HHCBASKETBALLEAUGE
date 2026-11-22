@@ -11,7 +11,9 @@ if ($BackendUrl -notmatch '^https://') { throw 'The Vercel backend address must 
 $league = Invoke-RestMethod "$BackendUrl/api/v1/public" -TimeoutSec 20
 if ($null -eq $league.teams) { throw 'The backend did not return league data.' }
 Push-Location -LiteralPath (Join-Path $taskRoot 'frontend')
+$taskPreviousNpmCache = $env:npm_config_cache
 try {
+    $env:npm_config_cache = Join-Path $taskRoot '.tools/npm-cache'
     $taskPreviousAssetOrigin = $env:LEAGUE_ASSET_ORIGIN
     try {
         $env:LEAGUE_ASSET_ORIGIN = $BackendUrl
@@ -24,4 +26,4 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Failed to save the Vercel realtime address.' }
     npx --yes vercel@latest deploy --project hhcbasketballleague --create-if-missing --yes --prod --build-env "BACKEND_URL=$BackendUrl" --build-env "NEXT_PUBLIC_REALTIME_URL=$BackendUrl/hubs/games" --env "BACKEND_URL=$BackendUrl" --env "NEXT_PUBLIC_REALTIME_URL=$BackendUrl/hubs/games" --logs
     if ($LASTEXITCODE -ne 0) { throw 'Vercel deployment failed.' }
-} finally { Pop-Location }
+} finally { $env:npm_config_cache = $taskPreviousNpmCache; Pop-Location }

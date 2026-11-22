@@ -2,6 +2,7 @@ namespace League.Api;
 
 public static class Competition
 {
+    public static bool HasOfficialResult(Game game) => game.Status == "Confirmed" || (game.Status == "Final" && game.ResultApproved);
     public static List<int> GroupSizes(Season season, string division) => season.GroupSizes.GetValueOrDefault(division) ?? [6, 6];
     public static int GroupCapacity(Season season, string division, string group)
     {
@@ -35,7 +36,13 @@ public static class Competition
     }
     public static List<Standing> Standings(LeagueState state, string seasonId, string division, string group)
     {
-        var games = state.Games.Where(g => g.SeasonId == seasonId && g.Division == division && g.Group == group && g.Stage == "Group" && g.Status == "Confirmed").ToList();
+        if (division == "Junior" && group is "Winners" or "RunnersUp" or "Wildcards")
+        {
+            var rank = group == "Winners" ? 0 : group == "RunnersUp" ? 1 : 2;
+            var candidates = Enumerable.Range(0, 3).Select(index => Standings(state, seasonId, division, ((char)('A' + index)).ToString()).ElementAtOrDefault(rank)).Where(row => row != null && row.Losses < 3).Cast<Standing>().ToList();
+            return candidates.GroupBy(row => row.Wins).OrderByDescending(rows => rows.Key).SelectMany(rows => Resolve(rows.ToList(), [], 3, state.Seasons.Single(s => s.Id == seasonId), division, group)).ToList();
+        }
+        var games = state.Games.Where(g => g.SeasonId == seasonId && g.Division == division && g.Group == group && g.Stage == "Group" && HasOfficialResult(g)).ToList();
         var rows = state.Teams.Where(t => t.SeasonId == seasonId && t.Division == division && t.Group == group && t.Status == "Approved")
             .Select(t => new Standing(t.Id, t.Name, games.Count(g => Winner(g) == t.Id), games.Count(g => Loser(g) == t.Id), games.Sum(g => g.HomeId == t.Id ? g.HomeScore : g.AwayId == t.Id ? g.AwayScore : 0), games.Sum(g => g.HomeId == t.Id ? g.AwayScore : g.AwayId == t.Id ? g.HomeScore : 0))).ToList();
         var season = state.Seasons.Single(s => s.Id == seasonId);
@@ -72,9 +79,10 @@ public static class Competition
         var season = state.Seasons.Single(s => s.Id == seasonId);
         var sizes = GroupSizes(season, division);
         var seniorTwelve = division == "Senior" && sizes.SequenceEqual(new[] { 4, 4, 4, 4 });
-        if (!seniorTwelve && (sizes.Count != 2 || sizes.Any(size => size < 4))) throw new RuleException("Playoff qualification must be configured for this group format before seeding.");
+        var juniorWildcards = division == "Junior" && sizes.SequenceEqual(new[] { 4, 4, 4 });
+        if (!seniorTwelve && !juniorWildcards && (sizes.Count != 2 || sizes.Any(size => size < 4))) throw new RuleException("Playoff qualification must be configured for this group format before seeding.");
         var expectedGames = sizes.Sum(size => size * (size - 1) / 2);
-        if (groupGames.Count != expectedGames || groupGames.Any(g => g.Status != "Confirmed")) throw new RuleException($"All {expectedGames} group games must be confirmed before seeding.");
+        if (groupGames.Count != expectedGames || groupGames.Any(g => !HasOfficialResult(g))) throw new RuleException($"All {expectedGames} group games must have approved results before seeding.");
         // Confirm the complete unique round robin, not only its total game count.
         var approved = state.Teams.Where(t => t.SeasonId == seasonId && t.Division == division && t.Status == "Approved").ToList();
         if (approved.Count != sizes.Sum()) throw new RuleException("Finalize group assignments before seeding.");
@@ -91,7 +99,16 @@ public static class Competition
         var relevant = state.Games.Where(g => g.SeasonId == seasonId && g.Division == division).Select(g => g.Id).ToHashSet();
         if (state.Discipline.Any(d => d.Type == "Protest" && !d.Resolved && relevant.Contains(d.GameId))) throw new RuleException("Resolve outstanding protests first.");
         var standings = sizes.Select((_, index) => Standings(state, seasonId, division, ((char)('A' + index)).ToString())).ToList();
-        if (standings.SelectMany(rows => rows.Take(seniorTwelve ? 3 : 4)).Any(r => r.Unresolved)) throw new RuleException("Record decisions for unresolved qualification or seed ties before seeding.");
+        if (standings.SelectMany(rows => rows.Take(juniorWildcards || seniorTwelve ? 3 : 4)).Any(r => r.Unresolved)) throw new RuleException("Record decisions for unresolved qualification or seed ties before seeding.");
+        List<Standing> seeds = [];
+        if (juniorWildcards)
+        {
+            var winners = Standings(state, seasonId, division, "Winners");
+            var runners = Standings(state, seasonId, division, "RunnersUp");
+            var wildcards = Standings(state, seasonId, division, "Wildcards").Take(2).ToList();
+            if (winners.Count != 3 || runners.Count != 3 || wildcards.Count != 2 || winners.Concat(runners).Concat(wildcards).Any(row => row.Unresolved || row.Losses >= 3)) throw new RuleException("Resolve Junior wildcard and playoff seed rankings; every qualifier must have fewer than three losses.");
+            seeds = [.. winners, .. runners, .. wildcards];
+        }
         var a = standings[0]; var b = standings[1];
         var seconds = state.Seasons.Single(s => s.Id == seasonId).QuarterSeconds;
         var dependencies = new Dictionary<string, string[]> { ["Q1"] = ["S1"], ["Q3"] = ["S1"], ["Q2"] = ["S2"], ["Q4"] = ["S2"], ["S1"] = ["F", "T"], ["S2"] = ["F", "T"] };
@@ -121,11 +138,11 @@ public static class Competition
             {
                 if (existing.Status != "Scheduled" || existing.Events.Count > 0) throw new RuleException("A downstream game has started. Resolve the bracket conflict before correcting this result.");
                 Invalidate(key);
-                existing.HomeId = home; existing.AwayId = away; existing.Roster.Clear(); existing.RosterSnapshots.Clear(); existing.Stats.Clear(); existing.Version++;
+                existing.HomeId = home; existing.AwayId = away; existing.Roster.Clear(); existing.OnCourt.Clear(); existing.StartingFive.Clear(); existing.RosterSnapshots.Clear(); existing.Stats.Clear(); existing.Version++;
             }
             if (existing != null) existing.Number = number;
         }
-        Game? Final(string key) => state.Games.SingleOrDefault(g => g.SeasonId == seasonId && g.Division == division && g.BracketKey == key && g.Status == "Confirmed");
+        Game? Final(string key) => state.Games.SingleOrDefault(g => g.SeasonId == seasonId && g.Division == division && g.BracketKey == key && HasOfficialResult(g));
         if (seniorTwelve)
         {
             var c = standings[2]; var d = standings[3];
@@ -137,6 +154,13 @@ public static class Competition
             if (Final("R4") is { } r4) Upsert("Q2", "Quarterfinal", b[0].TeamId, Winner(r4));
             if (Final("R1") is { } r1) Upsert("Q3", "Quarterfinal", c[0].TeamId, Winner(r1));
             if (Final("R3") is { } r3) Upsert("Q4", "Quarterfinal", d[0].TeamId, Winner(r3));
+        }
+        else if (juniorWildcards)
+        {
+            Upsert("Q1", "Quarterfinal", seeds[0].TeamId, seeds[7].TeamId);
+            Upsert("Q2", "Quarterfinal", seeds[1].TeamId, seeds[6].TeamId);
+            Upsert("Q3", "Quarterfinal", seeds[3].TeamId, seeds[4].TeamId);
+            Upsert("Q4", "Quarterfinal", seeds[2].TeamId, seeds[5].TeamId);
         }
         else
         {

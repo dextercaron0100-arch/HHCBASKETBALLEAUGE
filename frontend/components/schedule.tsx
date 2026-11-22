@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { divisionLabel } from "@/lib/divisions";
+import { hasOfficialResult } from "@/lib/results";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -112,7 +113,7 @@ export default function Schedule({
   const liveCount = matching.filter((g) => g.status === "Live").length;
   const filtered = matching.filter(
     (g) =>
-      (status === "All" || g.status === status) &&
+      (status === "All" || (status === "Confirmed" ? hasOfficialResult(g) : status === "Final" ? g.status === "Final" && !hasOfficialResult(g) : g.status === status)) &&
       (!liveOnly || g.status === "Live"),
   );
   const days = Array.from({ length: 10 }, (_, index) =>
@@ -228,7 +229,7 @@ export default function Schedule({
                   key={day}
                   className={`schedule-date ${date === day ? "selected" : ""} ${day === today ? "is-today" : ""}`}
                   aria-pressed={date === day}
-                  aria-label={`${formatDay(day, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}, ${count} games`}
+                  aria-label={`${formatDay(day, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}, ${count} ${count === 1 ? "game" : "games"}`}
                   onClick={() => setDate(day)}
                 >
                   <span className="date-weekday">
@@ -239,9 +240,11 @@ export default function Schedule({
                     {formatDay(day, { month: "short" })}
                   </span>
                   <span
-                    className={`date-game-dot ${count ? "has-games" : ""}`}
+                    className={`date-game-marker ${count ? "has-games" : ""}`}
                     aria-hidden="true"
-                  />
+                  >
+                    {count > 0 && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3v18M6 5.3c8 3.2 8 10.2 0 13.4M18 5.3c-8 3.2-8 10.2 0 13.4" /></svg>}
+                  </span>
                 </button>
               );
             })}
@@ -405,9 +408,6 @@ export default function Schedule({
                       })}
                   {day === today && <b>Today</b>}
                 </span>
-                <small>
-                  {matches.length} {matches.length === 1 ? "game" : "games"}
-                </small>
               </div>
               <div className="games-grid">
                 {matches.map((game) => (

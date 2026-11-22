@@ -2,7 +2,13 @@ import { test, expect } from "@playwright/test";
 
 test("calendar filters, date paging and spoiler-safe results", async ({
   page,
+  request,
 }) => {
+  const league = await (await request.get("/api/v1/public")).json();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: league.seasons[0].timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const teams = league.teams.filter((team: { division: string; group: string }) => team.division === "Senior" && team.group === "B");
+  const games = [10, 11].map((hour, index) => ({ ...league.games[0], id: `calendar-result-${index}`, division: "Senior", group: "B", homeId: teams[0].id, awayId: teams[1].id, status: "Confirmed", homeScore: 80, awayScore: 70, start: `${today}T${hour}:00:00+08:00` }));
+  await page.route("**/api/v1/public", route => route.fulfill({ json: { ...league, games } }));
   await page.goto("/schedule");
   await expect(
     page.getByRole("heading", { name: "Schedule & results", exact: true }),

@@ -4,12 +4,14 @@ test("initial realtime failures retry and enable control only after a game snaps
   const game = { id: "test-assigned-game", seasonId: "test-season", division: "Junior", group: "A", stage: "Group", bracketKey: "", homeId: "home", awayId: "away", start: null, courtId: "court", status: "Scheduled", homeScore: 0, awayScore: 0, quarter: 1, clockSeconds: 600, clockRunning: false, clockAt: new Date().toISOString(), version: 1, roster: [], stats: {}, homeFouls: 0, awayFouls: 0, homeTimeouts: 0, awayTimeouts: 0, scorekeeperId: "test-scorer", officialIds: [] };
   await page.route("**/api/v1/auth/me", route => route.fulfill({ json: { id: "test-scorer", email: "scorer@example.test", roles: ["Scorekeeper"] } }));
   await page.route("**/api/v1/scoring", route => route.fulfill({ json: [game] }));
-  await page.route("**/api/v1/games/test-assigned-game", route => route.fulfill({ json: game }));
+  let releaseSnapshot: () => void = () => {};
+  const snapshotGate = new Promise<void>(resolve => { releaseSnapshot = resolve; });
+  await page.route("**/api/v1/games/test-assigned-game", async route => { await snapshotGate; await route.fulfill({ json: game }); });
   let negotiations = 0;
   await page.route("**/hubs/games/negotiate*", route => { negotiations++; return negotiations <= 2 ? route.abort() : route.continue(); });
   await page.goto("/scorekeeper");
   const acquire = page.getByRole("button", { name: "Acquire control", exact: true });
-  await expect(acquire).toBeDisabled();
+  try { await expect(acquire).toBeDisabled(); } finally { releaseSnapshot(); }
   await expect(page.getByText("● Connected", { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(acquire).toBeEnabled();
   await expect(page.locator(".scorekeeper-board .clock")).toHaveText("10:00");

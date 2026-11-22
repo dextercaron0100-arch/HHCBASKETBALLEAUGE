@@ -14,10 +14,12 @@ export type Season = {
   seniorMax?: number;
   foulLimit?: number;
   timeoutLimit?: number;
+  timeoutPeriod?: "Game" | "Half";
+  overtimeTimeoutLimit?: number | null;
   restMinutes?: number;
   slotMinutes?: number;
   days?: number[];
-  sessions?: { startHour: number; endHour: number }[];
+  sessions?: { startHour: number; endHour: number; startMinute?: number; endMinute?: number }[];
   closures?: { courtId: string; start: string; end: string }[];
   tieDecisions?: Record<string, string[]>;
   groupSizes?: Record<string, number[]>;
@@ -57,6 +59,7 @@ export type Stats = {
   blocks: number;
   fouls: number;
 };
+export type GameLineup = { presentPlayerIds: string[]; starterPlayerIds: string[] };
 export type Game = {
   id: string;
   seasonId: string;
@@ -68,9 +71,11 @@ export type Game = {
   homeId: string;
   awayId: string;
   start: string | null;
+  durationMinutes?: number | null;
   courtId: string;
   status: string;
   homeScore: number;
+  resultApproved?: boolean;
   awayScore: number;
   quarter: number;
   clockSeconds: number;
@@ -78,6 +83,8 @@ export type Game = {
   clockAt: string;
   version: number;
   roster: string[];
+  onCourt?: string[];
+  startingFive?: string[];
   stats: Record<string, Stats>;
   homeFouls: number;
   awayFouls: number;
@@ -94,6 +101,8 @@ export type Game = {
     position: string;
   }[];
   quarterResults?: { quarter: number; home: number; away: number }[];
+  // Local practice history; official quarter totals come from server scoring events.
+  pointEvents?: { playerId: string; quarter: number; amount: number }[];
 };
 export type Post = {
   id: string;

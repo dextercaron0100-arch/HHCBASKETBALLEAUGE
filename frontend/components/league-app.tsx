@@ -1,16 +1,23 @@
 "use client";
 import { divisionLabel } from "@/lib/divisions";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { hasOfficialResult } from "@/lib/results";
+import { isPlayoffDisqualified } from "@/lib/playoff-eligibility";
+import { Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { usePracticeLeague } from "@/lib/practice-session";
 import {
   Activity,
   ArrowDownRight,
   ArrowRight,
+  ArrowUp,
   CalendarDays,
   ChevronRight,
+  ChevronLeft,
   CircleDot,
+  CheckCircle2,
   Home,
   ImageIcon,
   LayoutGrid,
@@ -21,6 +28,7 @@ import {
   Search,
   Trophy,
   Users,
+  UsersRound,
   X,
 } from "lucide-react";
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
@@ -36,20 +44,36 @@ import type {
   Team,
   User,
 } from "@/lib/types";
-import Admin from "./admin";
-import Manager from "./manager";
-import Scorekeeper from "./scorekeeper";
 import Schedule from "./schedule";
 import LeagueNavigation from "./league-navigation";
 import ChampionshipBracket from "./championship-bracket";
+import EliminationRules from "./elimination-rules";
 import HeroCarousel from "./hero-carousel";
 import LoadingShell from "./loading-shell";
+import Maintenance from "./maintenance";
 import MediaLightbox from "./media-lightbox";
 import Playoffs from "./playoffs";
 import FanHub from "./fan-hub";
 import TeamActions from "./team-actions";
 import { fetchPublicLeague, recentLeague } from "@/lib/public-league";
 import { backgroundImageSource, imageSources } from "@/lib/images";
+import UpcomingGamesStrip from "./upcoming-games-strip";
+import Players from "./players";
+import HomePlayerHighlights from "./home-player-highlights";
+
+const Admin = dynamic(() => import("./admin"), { loading: LoadingShell });
+const Manager = dynamic(() => import("./manager"), { loading: LoadingShell });
+const Scorekeeper = dynamic(() => import("./scorekeeper"), { loading: LoadingShell });
+
+function RouteParameters({ onChange }: { onChange: (division: string | null, team: string, player: string) => void }) {
+  const path = usePathname();
+  const params = useSearchParams();
+  const division = params.get("division");
+  const team = params.get("team") ?? "";
+  const player = params.get("player") ?? "";
+  useEffect(() => onChange(division, team, player), [path, division, team, player, onChange]);
+  return null;
+}
 
 const navigation = [
   { href: "/", label: "Overview", icon: Home },
@@ -58,24 +82,33 @@ const navigation = [
   { href: "/standings", label: "Standings & bracket", icon: Trophy },
   { href: "/playoffs", label: "Playoffs", icon: Trophy },
   { href: "/teams", label: "Teams & players", icon: Users },
+  { href: "/players", label: "Players & stats", icon: Activity },
   { href: "/statistics", label: "Statistics & awards", icon: Activity },
   { href: "/news", label: "News & media", icon: ImageIcon },
 ];
-export default function LeagueApp({ initialDivision = "Junior", initialTeam = "" }: { initialDivision?: string; initialTeam?: string }) {
+export default function LeagueApp() {
   const path = usePathname();
   const [league, setLeague] = useState<League | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [division, setDivision] = useState(initialDivision);
-  useEffect(() => setDivision(initialDivision), [initialDivision]);
+  const [division, setDivision] = useState("Junior");
+  const [initialTeam, setInitialTeam] = useState("");
+  const [initialPlayer, setInitialPlayer] = useState("");
+  const syncRouteParameters = useCallback((nextDivision: string | null, team: string, player: string) => {
+    if (nextDivision === "Junior" || nextDivision === "Senior") setDivision(nextDivision);
+    setInitialTeam(team);
+    setInitialPlayer(player);
+  }, []);
   const [season, setSeason] = useState("");
   const reload = useCallback(async () => {
     try {
       const data = await fetchPublicLeague();
-      setLeague(data);
-      setSeason((value) => value || data.seasons[0]?.id || "");
+      startTransition(() => {
+        setLeague(current => current?.revision === data.revision ? current : data);
+        setSeason((value) => value || data.seasons[0]?.id || "");
+      });
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -117,31 +150,40 @@ export default function LeagueApp({ initialDivision = "Junior", initialTeam = ""
     connection.on("LeagueChanged", reload);
     connection.onreconnected(reload);
     connection.start().catch(() => {});
-    const interval = setInterval(reload, 30000);
+    const refreshVisible = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) reload();
+    };
+    const interval = setInterval(refreshVisible, 15000);
+    document.addEventListener("visibilitychange", refreshVisible);
     return () => {
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshVisible);
       connection.stop().catch(() => {});
     };
   }, [reload]);
   const activeSeason = league?.seasons.find((s) => s.id === season);
-  const view = league
-    ? {
-        ...league,
-        seasons: league.seasons.filter((s) => s.id === season),
-        teams: league.teams.filter((t) => t.seasonId === season),
-        players: league.players.filter((p) =>
-          league.teams.some((t) => t.id === p.teamId && t.seasonId === season),
-        ),
-        games: league.games.filter((g) => g.seasonId === season),
-      }
-    : null;
+  const view = useMemo(() => {
+    if (!league) return null;
+    const teams = league.teams.filter(t => t.seasonId === season);
+    const teamIds = new Set(teams.map(t => t.id));
+    return {
+      ...league,
+      seasons: league.seasons.filter((s) => s.id === season),
+      teams,
+      players: league.players.filter(p => teamIds.has(p.teamId)),
+      games: league.games.filter((g) => g.seasonId === season),
+    };
+  }, [league, season]);
+  if (error && !league && !offline) return <Maintenance onRetry={reload} />;
   return (
     <div className="app-shell horizontal-layout full-page-backgrounds" data-page={path}>
+      <Suspense fallback={null}><RouteParameters onChange={syncRouteParameters} /></Suspense>
       <div className="league-page-background" aria-hidden="true" />
       <a href="#main" className="skip-link">
         Skip to content
       </a>
       <LeagueNavigation user={user} onLogout={() => setUser(null)} />
+      {path === "/" && view && <UpcomingGamesStrip league={view} />}
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
@@ -179,9 +221,9 @@ export default function LeagueApp({ initialDivision = "Junior", initialTeam = ""
         <main id="main" key={path} className="main-content" tabIndex={-1} aria-busy={!league && !error}>
           {offline && <div className="connection-notice" role="status"><Radio size={16} /><span>You’re offline. Scores and schedules will refresh when you reconnect.</span></div>}
           {refreshing && !offline && <div className="connection-notice" role="status"><Radio size={16} /><span>Showing recently loaded league data. Refreshing the latest updates…</span></div>}
-          {error && (
-            <div className="notice error" role="alert">
-              {error}{" "}
+          {error && !offline && (
+            <div className="connection-notice" role="status">
+              <span>Connection interrupted. Showing the last loaded league data. Scores and schedules may be outdated. Retrying automatically.</span>
               <Button variant="outline" size="sm" onClick={reload}>
                 Retry
               </Button>
@@ -220,6 +262,8 @@ export default function LeagueApp({ initialDivision = "Junior", initialTeam = ""
                 setDivision={setDivision}
                 initialTeam={initialTeam}
               />
+            ) : path === "/players" ? (
+              <Players league={view} division={division} setDivision={setDivision} initialPlayer={initialPlayer} />
             ) : path === "/statistics" ? (
               <Statistics
                 league={view}
@@ -230,7 +274,7 @@ export default function LeagueApp({ initialDivision = "Junior", initialTeam = ""
             ) : path === "/news" ? (
               <News league={view} />
             ) : path === "/live" ? (
-              <Live league={league!} />
+              <Live league={league!} user={user} />
             ) : path === "/admin" ? (
               <Admin user={user} reload={reload} />
             ) : path === "/manager" ? (
@@ -372,9 +416,9 @@ export function GameCard({
           </span>
         </span>
         <span
-          className={`badge ${game.status === "Live" ? "badge-live" : game.status === "Confirmed" ? "badge-final" : ""}`}
+          className={`badge ${game.status === "Live" ? "badge-live" : hasOfficialResult(game) ? "badge-final" : ""}`}
         >
-          {game.status === "Confirmed" ? "FINAL" : game.status.toUpperCase()}
+          {hasOfficialResult(game) ? "FINAL" : game.status.toUpperCase()}
         </span>
       </div>
       <div className="match-team">
@@ -407,7 +451,7 @@ export function GameCard({
         <CalendarDays size={13} />
         {game.status === "Live"
           ? `Q${game.quarter} · Live now`
-          : dateTime(game.start, season?.timezone || "Asia/Manila")}
+          : <>{dateTime(game.start, season?.timezone || "Asia/Manila")}{game.start && game.durationMinutes && <> – {new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: season?.timezone || "Asia/Manila" }).format(new Date(Date.parse(game.start) + game.durationMinutes * 60000))}</>}</>}
         <span>{court?.name || "Court TBA"}</span>
       </div>
     </Link>
@@ -423,11 +467,11 @@ function Overview({
   setDivision: (d: string) => void;
 }) {
   const games = league.games.filter((g) => g.division === division);
-  const upcoming = games
-    .filter((g) => g.status === "Scheduled")
-    .sort((a, b) => (a.start || "z").localeCompare(b.start || "z"))
+  const upcoming = league.games
+    .filter((g) => g.status === "Scheduled" && g.start && new Date(g.start).getTime() >= Date.now())
+    .sort((a, b) => new Date(a.start!).getTime() - new Date(b.start!).getTime())
     .slice(0, 3);
-  const recent = games.filter((g) => g.status === "Confirmed").slice(-3);
+  const recent = games.filter(hasOfficialResult).slice(-3);
   const live = league.games.filter((g) => g.status === "Live");
   return (
     <>
@@ -468,46 +512,42 @@ function Overview({
           </div>
         </div>
       </HeroCarousel>
+      <HomePlayerHighlights league={league} />
       <FanHub league={league} />
-      <div className="metric-grid">
+      <div className="metric-grid overview-metrics">
         {[
           {
             label: "Teams in the league",
             value: league.teams.length,
             detail: `${league.teams.filter(team => team.division === "Junior").length} Junior · ${league.teams.filter(team => team.division === "Senior").length} Open`,
-            icon: Users,
+            icon: UsersRound,
           },
           {
             label: "Games completed",
-            value: league.games.filter((g) => g.status === "Confirmed").length,
-            detail: "Every result counts",
-            icon: CalendarDays,
+            value: league.games.filter(hasOfficialResult).length,
+            detail: "Official, confirmed results",
+            icon: CheckCircle2,
           },
           {
             label: "Registered players",
             value: league.players.length,
-            detail: "The heart of the game",
-            icon: Activity,
+            detail: "Across Junior & Open divisions",
+            icon: Users,
           },
           {
             label: "Live right now",
             value: live.length,
             detail: live.length
               ? "Follow the action"
-              : "Next tip-off coming soon",
+              : upcoming[0]?.start ? `Next tip-off · ${dateTime(upcoming[0].start, league.seasons[0]?.timezone || "Asia/Manila")}` : "Next tip-off coming soon",
             icon: Radio,
           },
         ].map((m) => (
-          <div className="metric" key={m.label}>
-            <span className="metric-icon">
-              <m.icon size={20} />
-            </span>
-            <div>
-              <span>{m.label}</span>
-              <strong>{m.value.toString().padStart(2, "0")}</strong>
-              <small>{m.detail}</small>
-            </div>
-          </div>
+          <article className={`metric ${m.label === "Live right now" && live.length ? "is-live" : ""}`} key={m.label}>
+            <div className="metric-top"><span className="metric-label">{m.label}</span><span className="metric-icon" aria-hidden="true"><m.icon size={21} strokeWidth={1.8} /></span></div>
+            <strong className="metric-value">{m.value.toLocaleString("en-PH")}</strong>
+            <div className="metric-footer"><span className="metric-indicator" aria-hidden="true" /><small>{m.detail}</small></div>
+          </article>
         ))}
       </div>
       <nav className="league-shortcuts" aria-label="Explore the league">
@@ -515,7 +555,7 @@ function Overview({
           { href: "/standings", icon: Trophy, label: "The road to the title", detail: "Group brackets & standings" },
           { href: "/teams", icon: Users, label: "Meet your teams", detail: "Team profiles & player rosters" },
           { href: "/schedule", icon: CalendarDays, label: "Find your next game", detail: "Schedule & confirmed results" },
-        ].map(item => <Link key={item.href} href={item.href}><span className="shortcut-icon"><item.icon size={23} /></span><span><strong>{item.label}</strong><small>{item.detail}</small></span><ArrowRight size={18} /></Link>)}
+        ].map(item => <Link key={item.href} href={item.href}><span className="shortcut-icon" aria-hidden="true"><item.icon size={25} strokeWidth={1.8} /></span><span className="shortcut-copy"><strong>{item.label}</strong><small>{item.detail}</small></span><span className="shortcut-arrow" aria-hidden="true"><ArrowRight size={17} /></span></Link>)}
       </nav>
       {live.length > 0 && (
         <section>
@@ -530,7 +570,7 @@ function Overview({
       <section>
         <SectionTitle
           title="Next on the court"
-          subtitle={`${divisionLabel(division)} division · Upcoming matchups`}
+          subtitle="Junior & Open divisions · Next 3 scheduled games"
           href="/schedule"
         />
         <div className="games-grid">
@@ -573,7 +613,7 @@ function Overview({
           <div className="community-snapshot">
             <div className="community-snapshot-heading"><span className="community-snapshot-icon"><Trophy size={23} /></span><div><span className="eyebrow">THE CHAMPIONSHIP CHASE</span><h3>Two divisions. One goal.</h3></div></div>
             <div className="community-division-grid">
-              {(["Junior", "Senior"] as const).map(value => <Link href={`/standings?division=${value}`} key={value} aria-label={`View ${divisionLabel(value)} standings`}><span>{divisionLabel(value)} division <ArrowRight size={13} /></span><strong>{league.teams.filter(team => team.division === value).length}<small>teams</small></strong><span className="community-qualifiers">{value === "Junior" ? "8 playoff spots · Top 4 per group" : "12 playoff spots · Top 3 per group"}</span></Link>)}
+              {(["Junior", "Senior"] as const).map(value => <Link href={`/standings?division=${value}`} key={value} aria-label={`View ${divisionLabel(value)} standings`}><span>{divisionLabel(value)} division <ArrowRight size={13} /></span><strong>{league.teams.filter(team => team.division === value).length}<small>teams</small></strong><span className="community-qualifiers">{value === "Junior" ? "8 playoff spots · Top 2 + 2 wildcards" : "12 playoff spots · Top 3 per group"}</span></Link>)}
             </div>
             <div className="community-team-preview"><div className="community-team-marks" aria-hidden="true">{league.teams.filter(team => team.division === division).slice(0, 6).map(team => <TeamMark key={team.id} team={team} size="tiny" />)}</div><Link href={`/teams?division=${division}`}>Meet the {divisionLabel(division)} teams <ArrowRight size={14} /></Link></div>
             <Link href={`/playoffs?division=${division}`} className="community-playoffs-link"><span><Trophy size={17} /> Follow the road to the trophy</span><ArrowRight size={17} /></Link>
@@ -636,7 +676,7 @@ function Standings({
   const groupSizes = league.seasons.find(s => s.id === season)?.groupSizes?.[division] ?? [6, 6];
   const groups = groupSizes.map((_, index) => String.fromCharCode(65 + index));
   const activeGroup = groups.includes(group) ? group : "A";
-  const qualifyingPlaces = division === "Senior" && groupSizes.join(",") === "4,4,4,4" ? 3 : groups.length === 2 ? 4 : 0;
+  const qualifyingPlaces = division === "Senior" && groupSizes.join(",") === "4,4,4,4" ? 3 : division === "Junior" && groupSizes.join(",") === "4,4,4" ? 2 : groups.length === 2 ? 4 : 0;
   return (
     <>
       <PageHeading
@@ -646,6 +686,7 @@ function Standings({
       >
         <Divisions value={division} onChange={setDivision} />
       </PageHeading>
+      <a className="standings-rules-jump" href="#elimination-format"><ShieldCheck size={16} aria-hidden="true" />How do eliminations work?<ArrowRight size={15} aria-hidden="true" /></a>
       <ChampionshipBracket
         division={divisionLabel(division)}
         teams={league.teams.filter(team => team.seasonId === season && team.division === division)}
@@ -670,7 +711,7 @@ function Standings({
               </button>
             ))}
           </div>
-          <span className="badge">{qualifyingPlaces ? `TOP ${qualifyingPlaces} ADVANCE` : "GROUP STAGE"}</span>
+          <span className="badge">{division === "Junior" && groupSizes.join(",") === "4,4,4" ? "TOP 2 + WILDCARDS" : qualifyingPlaces ? `TOP ${qualifyingPlaces} ADVANCE` : "GROUP STAGE"}</span>
         </div>
         <StandingsTable
           league={league}
@@ -679,12 +720,12 @@ function Standings({
           group={activeGroup}
         />
         <p className="table-note">
-          {qualifyingPlaces ? <><span className="qualification-dot" /> Top {qualifyingPlaces} per group qualify · {qualifyingPlaces === 3 ? "Group winners receive quarterfinal byes. " : ""}Final seeding follows confirmed results and resolved ties.</> : "Playoff qualification will be announced after the group-stage format is confirmed."}
+          {qualifyingPlaces ? <><span className="qualification-dot" /> {division === "Junior" ? `Top ${qualifyingPlaces} per group qualify only with fewer than three confirmed losses. ` : `Top ${qualifyingPlaces} per group qualify. `}{qualifyingPlaces === 3 ? "Group winners receive quarterfinal byes. " : ""}Final seeding follows confirmed results and resolved ties.</> : "Playoff qualification will be announced after the group-stage format is confirmed."}
         </p>
-        <p className="table-note">
-          {division === "Junior" ? "Tiebreakers: wins → head-to-head / mini-league wins → mini-league point differential → mini-league points scored → overall point differential → overall points scored → draw lots. Tied subsets are recalculated." : "Tiebreakers: wins → head-to-head (two teams) / mini-league point differential (three or more) → mini-league points scored → overall point differential → overall points scored → draw lots."}
-        </p>
+        {division === "Junior" && groupSizes.join(",") === "4,4,4" && <p className="table-note"><strong>Junior wildcards:</strong> The two best third-place teams across Brackets A, B and C qualify, ranked by confirmed wins, point difference, then points scored. Unresolved ties require an organizer decision. Eight teams advance to the quarterfinals.</p>}
+        {division === "Junior" && <p className="table-note"><strong>Junior three-loss rule:</strong> Three confirmed group-stage losses mean automatic elimination from playoff contention, including wildcard contention.</p>}
       </div>
+      <EliminationRules division={division} season={league.seasons.find(s => s.id === season)} />
     </>
   );
 }
@@ -702,30 +743,53 @@ function StandingsTable({
   compact?: boolean;
 }) {
   const [rows, setRows] = useState<Standing[]>([]);
+  const [wildcardRows, setWildcardRows] = useState<Standing[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const sizes = league.seasons.find(s => s.id === season)?.groupSizes?.[division] ?? [6, 6];
-  const qualifyingPlaces = division === "Senior" && sizes.join(",") === "4,4,4,4" ? 3 : sizes.length === 2 ? 4 : 0;
+  const juniorWildcards = division === "Junior" && sizes.join(",") === "4,4,4";
+  const qualifyingPlaces = division === "Senior" && sizes.join(",") === "4,4,4,4" ? 3 : division === "Junior" && sizes.join(",") === "4,4,4" ? 2 : sizes.length === 2 ? 4 : 0;
   const groupSize = league.seasons.find(s => s.id === season)?.groupSizes?.[division]?.[group.charCodeAt(0) - 65] ?? 6;
   const groupGames = league.games.filter(game => game.seasonId === season && game.division === division && game.group === group && game.stage === "Group" && game.status !== "Cancelled");
-  const groupComplete = groupGames.length === groupSize * (groupSize - 1) / 2 && groupGames.every(game => game.status === "Confirmed");
-  const hasResults = league.games.some(game => game.seasonId === season && game.division === division && game.group === group && game.stage === "Group" && game.status === "Confirmed");
+  const groupComplete = groupGames.length === groupSize * (groupSize - 1) / 2 && groupGames.every(hasOfficialResult);
+  const hasResults = league.games.some(game => game.seasonId === season && game.division === division && game.group === group && game.stage === "Group" && hasOfficialResult(game));
+  const divisionGroupGames = league.games.filter(game => game.seasonId === season && game.division === division && game.stage === "Group" && game.status !== "Cancelled");
+  const divisionComplete = divisionGroupGames.length === 18 && divisionGroupGames.every(hasOfficialResult);
+  const rowStatus = (row: Standing, index: number) => {
+    if (isPlayoffDisqualified(league.teams.find(team => team.id === row.teamId))) return "DISQUALIFIED";
+    if (!hasResults) return "NOT STARTED";
+    if (division === "Junior" && row.losses >= 3) return "ELIMINATED";
+    if (row.unresolved) return "TIE REVIEW";
+    if (qualifyingPlaces > 0 && index < qualifyingPlaces) return groupComplete ? qualifyingPlaces === 3 && index === 0 ? "QF BYE" : "QUALIFIED" : `TOP ${qualifyingPlaces}`;
+    if (juniorWildcards && index === 2) {
+      if (!divisionComplete) return "WILDCARD RACE";
+      if (wildcardRows.some(candidate => candidate.unresolved)) return "TIE REVIEW";
+      const rank = wildcardRows.findIndex(candidate => candidate.teamId === row.teamId);
+      return rank >= 0 && rank < 2 ? "WILDCARD QUALIFIED" : "ELIMINATED";
+    }
+    return groupComplete && qualifyingPlaces > 0 ? "ELIMINATED" : "IN THE RACE";
+  };
   useEffect(() => {
     if (!season) return;
     let current = true;
     setLoading(true);
     setError("");
     setRows([]);
-    api<Standing[]>(`/standings/${season}/${division}/${group}`)
-      .then((r) => {
+    setWildcardRows([]);
+    Promise.all([
+      api<Standing[]>(`/standings/${season}/${division}/${group}`),
+      juniorWildcards ? api<Standing[]>(`/standings/${season}/${division}/Wildcards`) : Promise.resolve([] as Standing[]),
+    ])
+      .then(([r, wildcardRanks]) => {
         if (!current) return;
         setRows(r);
+        setWildcardRows(wildcardRanks);
         setError("");
       })
       .catch((e) => { if (current) setError(e.message); })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, [season, division, group, league.revision]);
+  }, [season, division, group, league.revision, juniorWildcards]);
   return (
     <>
       {error && <p className="error">{error}</p>}
@@ -748,7 +812,7 @@ function StandingsTable({
             {rows.map((row, i) => (
               <tr key={row.teamId}>
                 <td>
-                  <span className={`rank ${hasResults && qualifyingPlaces > 0 && i < qualifyingPlaces ? "qualified" : ""}`}>
+                  <span className={`rank ${["QUALIFIED", "WILDCARD QUALIFIED"].includes(rowStatus(row, i)) || rowStatus(row, i).startsWith("TOP ") ? "qualified" : ""}`}>
                     {i + 1}
                   </span>
                 </td>
@@ -772,13 +836,9 @@ function StandingsTable({
                 {!compact && (
                   <td>
                     <span
-                      className={`badge ${!hasResults ? "" : row.unresolved ? "badge-demo" : qualifyingPlaces > 0 && i < qualifyingPlaces ? "badge-qualified" : ""}`}
+                      className={`badge ${rowStatus(row, i) === "TIE REVIEW" ? "badge-demo" : ["QUALIFIED", "WILDCARD QUALIFIED"].includes(rowStatus(row, i)) || rowStatus(row, i).startsWith("TOP ") ? "badge-qualified" : ""}`}
                     >
-                      {!hasResults ? "NOT STARTED" : row.unresolved
-                        ? "TIE REVIEW"
-                        : qualifyingPlaces > 0 && i < qualifyingPlaces
-                          ? groupComplete ? qualifyingPlaces === 3 && i === 0 ? "QF BYE" : "QUALIFIED" : `TOP ${qualifyingPlaces}`
-                          : groupComplete && qualifyingPlaces > 0 ? "ELIMINATED" : "IN THE RACE"}
+                      {rowStatus(row, i)}
                     </span>
                   </td>
                 )}
@@ -816,6 +876,7 @@ function Teams({
   const [directoryView, setDirectoryView] = useState<"grid" | "list">("grid");
   const teamButtons = useRef(new Map<string, HTMLButtonElement>());
   const rosterRef = useRef<HTMLElement>(null);
+  const directoryRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     try { if (localStorage.getItem("hhc-team-directory-view") === "list") setDirectoryView("list"); } catch {}
   }, []);
@@ -867,7 +928,11 @@ function Teams({
     return () => cancelAnimationFrame(frame);
   }, [selected?.id]);
   return (
-    <div className="teams-page">
+    <div className="teams-page" ref={directoryRef} tabIndex={-1}>
+      {selected && <button type="button" className="teams-back-to-top" aria-label="Back to top of teams page" title="Back to top" onClick={() => {
+        directoryRef.current?.focus({ preventScroll: true });
+        window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+      }}><ArrowUp size={23} strokeWidth={2.2} aria-hidden="true" /></button>}
       {selected?.logo && createPortal(
         <div className="selected-team-background" aria-hidden="true">
           <img key={selected.id} src={backgroundImageSource(selected.logo)} alt="" decoding="async" />
@@ -955,7 +1020,7 @@ function Teams({
               league.games
                 .filter(
                   (g) =>
-                    g.status === "Confirmed" &&
+                    hasOfficialResult(g) &&
                     (g.homeId === selected.id || g.awayId === selected.id),
                 )
                 .reduce(
@@ -977,7 +1042,7 @@ function Teams({
               league.games
                 .filter(
                   (g) =>
-                    g.status === "Confirmed" &&
+                    hasOfficialResult(g) &&
                     (g.homeId === selected.id || g.awayId === selected.id),
                 )
                 .filter((g) =>
@@ -1025,6 +1090,7 @@ function PlayerDetail({ player, league }: { player: Player; league: League }) {
           </div>
         ))}
       </div>
+      <Link href={`/players?division=${league.teams.find(t => t.id === player.teamId)?.division || "Junior"}&player=${player.id}`} className="text-link">View player profile & game log <ArrowRight size={14} /></Link>
     </div>
   );
 }
@@ -1042,13 +1108,33 @@ function Statistics({
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [sort, setSort] = useState<keyof Leader>("ppg");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({ key: "", page: 1 });
+  const tableHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { setPagination({ key: "", page: 1 }); }, [season, division, sort]);
   useEffect(() => {
-    if (season)
-      api<Leader[]>(`/leaders/${season}/${division}`)
-        .then(setLeaders)
-        .catch((e) => setError(e.message));
+    if (!season) return;
+    let current = true;
+    setLoading(true);
+    setLeaders([]);
+    setError("");
+    api<Leader[]>(`/leaders/${season}/${division}`)
+      .then(data => { if (current) { setLeaders(data); setPagination(previous => ({ ...previous, page: Math.min(previous.page, Math.max(1, Math.ceil(data.length / 20))) })); } })
+      .catch((e) => { if (current) setError(e.message); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
   }, [season, division, league.revision]);
   const sorted = [...leaders].sort((a, b) => Number(b[sort]) - Number(a[sort]));
+  const pageKey = `${season}:${division}:${sort}`;
+  const pageCount = Math.max(1, Math.ceil(sorted.length / 20));
+  const currentPage = Math.min(pagination.key === pageKey ? pagination.page : 1, pageCount);
+  const offset = (currentPage - 1) * 20;
+  const visibleLeaders = sorted.slice(offset, offset + 20);
+  const changePage = (page: number) => {
+    setPagination({ key: pageKey, page });
+    tableHeading.current?.focus({ preventScroll: true });
+    tableHeading.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+  };
   return (
     <>
       <PageHeading
@@ -1061,7 +1147,7 @@ function Statistics({
       {error && <p className="error">{error}</p>}
       <div className="panel">
         <div className="section-title">
-          <h2>Player leaders</h2>
+          <h2 ref={tableHeading} tabIndex={-1} className="statistics-table-heading">Player leaders</h2>
           <select
             aria-label="Sort statistics"
             value={sort}
@@ -1082,8 +1168,9 @@ function Statistics({
             ))}
           </select>
         </div>
-        <div className="table-wrap">
+        <div className="table-wrap" aria-busy={loading}>
           <table>
+            <caption className="sr-only">Player statistics</caption>
             <thead>
               <tr>
                 {[
@@ -1104,11 +1191,11 @@ function Statistics({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((p, i) => (
+              {visibleLeaders.map((p, i) => (
                 <tr key={p.id}>
-                  <td>{i + 1}</td>
+                  <td>{offset + i + 1}</td>
                   <td>
-                    <strong>{p.name}</strong>
+                    <Link href={`/players?division=${division}&player=${p.id}`} className="player-stat-link"><strong>{p.name}</strong></Link>
                     <small className="table-sub">
                       {league.teams.find((t) => t.id === p.teamId)?.name} · #
                       {p.number}
@@ -1125,9 +1212,18 @@ function Statistics({
                   <td>{p.eligible ? p.ranking : "—"}</td>
                 </tr>
               ))}
+              {visibleLeaders.length === 0 && <tr><td colSpan={11}>{loading ? "Loading player statistics…" : error ? "Statistics are currently unavailable." : "No player statistics yet."}</td></tr>}
             </tbody>
           </table>
         </div>
+        {!loading && sorted.length > 0 && <nav className="statistics-pagination" aria-label="Player statistics pagination">
+          <span role="status" aria-live="polite">Showing <strong>{offset + 1}–{Math.min(offset + 20, sorted.length)}</strong> of {sorted.length} players</span>
+          <div className="statistics-pagination-controls">
+            <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}><ChevronLeft size={16} aria-hidden="true" />Previous</Button>
+            <span>Page <strong>{currentPage}</strong> of {pageCount}</span>
+            <Button variant="outline" size="sm" disabled={currentPage === pageCount} onClick={() => changePage(currentPage + 1)}>Next<ChevronRight size={16} aria-hidden="true" /></Button>
+          </div>
+        </nav>}
         <p className="table-note">
           MVP average: PTS + 1.2×REB + 1.5×AST + 3×STL + 3×BLK. Minimum
           participation: half the team’s confirmed games. Rankings are
@@ -1248,7 +1344,24 @@ function News({ league }: { league: League }) {
     </>
   );
 }
-function Live({ league }: { league: League }) {
+function Live({ league, user }: { league: League; user: User | null }) {
+  const searchParams = useSearchParams();
+  const practice = searchParams.get("practice") === "1";
+  const { league: trial, ready } = usePracticeLeague();
+  if (practice && !user) return <>
+    <PageHeading eyebrow="SCOREKEEPING PRACTICE" title="Sign in to view the trial scoreboard" description="Use your league account to access the practice game." />
+    <div className="button-row"><Button asChild><Link href="/login">Sign in</Link></Button><Button variant="outline" asChild><Link href="/live">Official live scores</Link></Button></div>
+  </>;
+  return <>
+    {user && <section className="scorekeeper-practice-banner" aria-label="Trial live scoreboard">
+      <div><span className="eyebrow">{practice ? "TRIAL LIVE SCORE" : "SCOREKEEPING PRACTICE"}</span><h2>{practice ? "West Wolves vs East Eagles" : "Watch your trial game here"}</h2><p>{practice ? "Updates instantly from the practice desk in this browser, including other tabs. This trial is not broadcast to other devices or counted in official results." : "See your practice scores, clock, fouls and player stats on the live scoreboard."}</p></div>
+      <div className="button-row">{practice ? <><Button asChild><Link href="/scorekeeper?practice=1">Open practice desk</Link></Button><Button variant="outline" asChild><Link href="/live">Official games</Link></Button></> : <Button asChild><Link href="/live?practice=1">View trial scoreboard</Link></Button>}</div>
+    </section>}
+    {(!practice || ready) && <LiveScoreboard key={practice ? "trial" : "official"} league={practice ? trial : league} practice={practice} />}
+  </>;
+}
+
+function LiveScoreboard({ league, practice = false }: { league: League; practice?: boolean }) {
   const [selected, setSelected] = useState("");
   const [game, setGame] = useState<Game | null>(null);
   const [connected, setConnected] = useState(false);
@@ -1261,6 +1374,10 @@ function Live({ league }: { league: League }) {
     setSelected(current => availableGames.some(g => g.id === current) ? current : availableGames.find(g => g.id === param)?.id || availableGames[0]?.id || "");
   }, [league.games]);
   useEffect(() => {
+    if (practice) { setGame(league.games[0]); setSelected(league.games[0].id); setConnected(true); return; }
+  }, [practice, league.games]);
+  useEffect(() => {
+    if (practice) return;
     if (!selected) return;
     let cancelled = false;
     setGame(null);
@@ -1307,7 +1424,7 @@ function Live({ league }: { league: League }) {
       clearInterval(poll);
       connection.stop().catch(() => {});
     };
-  }, [selected]);
+  }, [selected, practice]);
   const seconds = useGameClock(game);
   const home = league.teams.find((t) => t.id === game?.homeId);
   const away = league.teams.find((t) => t.id === game?.awayId);
@@ -1319,7 +1436,7 @@ function Live({ league }: { league: League }) {
       <PageHeading
         eyebrow="FOLLOW EVERY BASKET"
         title="Live scoreboard"
-        description="A courtside view, wherever you are."
+        description={practice ? "Trial scoreboard · fictional teams · saved in this browser." : "A courtside view, wherever you are."}
       />
       {availableGames.length > 0 && <div className="filter-bar live-game-picker">
         <label>
@@ -1339,7 +1456,7 @@ function Live({ league }: { league: League }) {
           </select>
         </label>
         <span role="status" className={`connection ${connected ? "positive" : "subtle"}`}>
-          {connected
+          {practice ? "● Trial · updates from your practice desk" : connected
             ? "● Connected live"
             : "● Connecting · automatic refresh every 10s"}
         </span>
@@ -1363,7 +1480,7 @@ function Live({ league }: { league: League }) {
               <div>
                 <TeamMark team={home} size="large" />
                 <h2>{home?.name}</h2>
-                <Link className="scoreboard-team-link" href={`/teams?division=${game.division}&team=${home?.id}#team-roster`}>HOME · View roster <ChevronRight size={12} /></Link>
+                {practice ? <span className="scoreboard-team-link">HOME · Practice team</span> : <Link className="scoreboard-team-link" href={`/teams?division=${game.division}&team=${home?.id}#team-roster`}>HOME · View roster <ChevronRight size={12} /></Link>}
               </div>
               <div className="scoreboard-center">
                 <div className="big-score">
@@ -1384,12 +1501,12 @@ function Live({ league }: { league: League }) {
                   · {game.clockRunning ? "CLOCK RUNNING" : "CLOCK STOPPED"}
                 </span>}
                 <p className="scoreboard-margin" aria-live="polite">{scoreMessage}</p>
-                {finished && <span>{game.status === "Confirmed" ? "Official result" : "Awaiting organizer confirmation"}</span>}
+                {finished && <span>{practice ? "Trial complete · no official result" : hasOfficialResult(game) ? game.status === "Final" ? "Official result · player stats pending" : "Official result" : "Awaiting organizer confirmation"}</span>}
               </div>
               <div>
                 <TeamMark team={away} size="large" />
                 <h2>{away?.name}</h2>
-                <Link className="scoreboard-team-link" href={`/teams?division=${game.division}&team=${away?.id}#team-roster`}>AWAY · View roster <ChevronRight size={12} /></Link>
+                {practice ? <span className="scoreboard-team-link">AWAY · Practice team</span> : <Link className="scoreboard-team-link" href={`/teams?division=${game.division}&team=${away?.id}#team-roster`}>AWAY · View roster <ChevronRight size={12} /></Link>}
               </div>
             </div>
             <div className="scoreboard-bottom">

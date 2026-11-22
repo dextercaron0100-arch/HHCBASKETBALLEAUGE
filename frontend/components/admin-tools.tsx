@@ -274,19 +274,17 @@ export function CalendarEditor({
       {draft.sessions?.map((session, index) => (
         <div className="calendar-row" key={index}>
           <label>
-            Start hour
+            Start time
             <input
               required
-              type="number"
-              min={0}
-              max={23}
-              value={session.startHour}
+              type="time"
+              value={`${String(session.startHour).padStart(2, "0")}:${String(session.startMinute ?? 0).padStart(2, "0")}`}
               onChange={(e) =>
                 change(
                   "sessions",
                   draft.sessions!.map((s, i) =>
                     i === index
-                      ? { ...s, startHour: Number(e.target.value) }
+                      ? { ...s, startHour: Number(e.target.value.split(":")[0]), startMinute: Number(e.target.value.split(":")[1]) }
                       : s,
                   ),
                 )
@@ -294,18 +292,16 @@ export function CalendarEditor({
             />
           </label>
           <label>
-            End hour
+            End time
             <input
               required
-              type="number"
-              min={1}
-              max={24}
-              value={session.endHour}
+              type="time"
+              value={`${String(session.endHour % 24).padStart(2, "0")}:${String(session.endMinute ?? 0).padStart(2, "0")}`}
               onChange={(e) =>
                 change(
                   "sessions",
                   draft.sessions!.map((s, i) =>
-                    i === index ? { ...s, endHour: Number(e.target.value) } : s,
+                    i === index ? { ...s, endHour: e.target.value === "00:00" ? 24 : Number(e.target.value.split(":")[0]), endMinute: Number(e.target.value.split(":")[1]) } : s,
                   ),
                 )
               }
@@ -535,7 +531,7 @@ export function TieResolver({
           Division
           <select
             value={division}
-            onChange={(e) => setDivision(e.target.value)}
+            onChange={(e) => { setDivision(e.target.value); setGroup("A"); }}
           >
             <option>Junior</option>
             <option value="Senior">Open</option>
@@ -544,8 +540,8 @@ export function TieResolver({
         <label>
           Group
           <select value={group} onChange={(e) => setGroup(e.target.value)}>
-            <option>A</option>
-            <option>B</option>
+            {(state.seasons.find(season => season.id === seasonId)?.groupSizes?.[division] ?? [6, 6]).map((_, index) => <option key={index}>{String.fromCharCode(65 + index)}</option>)}
+            {division === "Junior" && state.seasons.find(season => season.id === seasonId)?.groupSizes?.Junior?.join(",") === "4,4,4" && <><option value="Winners">Group winners: seeds 1–3</option><option value="RunnersUp">Runners-up: seeds 4–6</option><option value="Wildcards">Third-place wildcard ranking</option></>}
           </select>
         </label>
       </div>

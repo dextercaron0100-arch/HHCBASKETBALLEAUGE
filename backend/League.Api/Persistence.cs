@@ -51,7 +51,7 @@ public class LeagueStore(LeagueDb db)
     {
         var result = new Dictionary<string,string>();
         void Add(string type,string id,object item) => result[$"{type}:{id}"] = JsonSerializer.Serialize(item,Json);
-        foreach(var g in s.Games) Add("game",g.Id,new {g.Id,g.HomeId,g.AwayId,g.Status,g.Start,g.CourtId,g.HomeScore,g.AwayScore,g.Quarter,g.ClockSeconds,g.ClockRunning,g.ClockAt,g.Version,g.ScorekeeperId,g.OfficialIds});
+        foreach(var g in s.Games) Add("game",g.Id,new {g.Id,g.HomeId,g.AwayId,g.Status,g.ResultApproved,g.Start,g.DurationMinutes,g.CourtId,g.HomeScore,g.AwayScore,g.Quarter,g.ClockSeconds,g.ClockRunning,g.ClockAt,g.Version,g.ScorekeeperId,g.OfficialIds});
         foreach(var p in s.Players) Add("player",p.Id,p);
         foreach(var t in s.Teams) Add("team",t.Id,t);
         foreach(var season in s.Seasons) Add("season",season.Id,season);

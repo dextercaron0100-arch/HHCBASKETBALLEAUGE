@@ -29,6 +29,8 @@ test("top navigation supports keyboard dropdowns and responsive links", async ({
   await expect(mobile).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.setViewportSize({ width: 768, height: 1024 });
+  await expect(toggle).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
   await expect(nav).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

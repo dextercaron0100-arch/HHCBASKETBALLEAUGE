@@ -2,7 +2,7 @@
 
 A league platform for Junior and Open divisions, team rosters, live scorekeeping, and organizer administration. The interface uses Next.js 16, TypeScript, Tailwind, and shadcn-compatible components. The API uses ASP.NET Core 10, Identity, Entity Framework Core, PostgreSQL 18, and SignalR.
 
-Maintenance mode is controlled by `frontend/lib/site-status.ts`; set it to `true` to show the maintenance page or `false` to open the league site, then redeploy. This repository contains application source and public image assets; live league data, private uploads, credentials, and local backups are not included.
+The Vercel site retries failed league requests twice before reporting a connection problem. A loaded page stays visible with its last loaded data and an outdated-data warning during an outage; first-time visitors see **Under maintenance** only if all three attempts fail. Visible tabs check every 15 seconds; each attempt times out after 10 seconds, with 1- and 2-second retry delays. Pages automatically recover when the backend returns. Docker can be healthy while the public backend tunnel is unreachable; restarting a temporary tunnel changes its address and requires redeploying Vercel. The local Docker URL cannot serve a page while its frontend container is stopped. For planned maintenance, set `frontend/lib/site-status.ts` to `true` and redeploy; set it to `false` to enable automatic availability detection. This repository contains application source and public image assets; live league data, private uploads, credentials, and local backups are not included.
 
 Public frontend: **https://hhcbasketballleague.vercel.app**. The backend and data remain on this computer. Keep Docker and `hhc-backend-public` running for league data, logos, sign-in, and live scores. Redeploy frontend changes with `./infrastructure/deploy-vercel.ps1`; see [deployment](docs/deployment.md) for backend tunnel renewal.
 
@@ -18,6 +18,8 @@ Install and start Docker Desktop with Linux containers. From this directory:
 Open **http://localhost:3000**. `-Demo` explicitly seeds fictional teams and players; omit it for an empty real league. Seeding never runs automatically and refuses an existing league. The setup script generates ignored local credentials in `.env` if none exist.
 
 On this computer, Docker's existing data disk was relocated to **`.tools/docker-storage/disk/docker_data.vhdx` on D:** after C: ran out of space. Its original Windows location points here through a directory junction. **Keep `.tools/docker-storage` when cleaning build caches or moving the workspace**: it contains the persistent Docker images, containers, and league database. This machine-specific relocation is not needed for a fresh installation.
+
+Docker Desktop still writes host logs to C:, so that drive needs free space even with the data disk on D:. The user's npm download cache (`AppData/Local/npm-cache/_cacache`) is now redirected through a junction to `.tools/cache-recovery` on D:, and the deployment helper uses `.tools/npm-cache`. Keep the cache junction's target available when moving this workspace; it contains reproducible package downloads, separate from the Docker database disk.
 
 The local stack provides PostgreSQL, an S3-compatible Adobe S3Mock server, the API, and the frontend. The frontend listens on port 3000 on all host interfaces for local network testing; database, storage, and API ports bind to localhost. Use `docker compose stop` to stop the stack without deleting its data. Use `docker compose up -d` to restart it.
 
@@ -45,7 +47,7 @@ In a second terminal, run `./infrastructure/dev.ps1 -Mode Web`. SQLite data resi
 1. Sign in and open **Organizer dashboard**. Create a season and configure official cutoff dates, division age ranges, game duration, foul limits, and timeouts. Open registration only after defining eligibility.
 2. Team managers create accounts, submit teams and rosters, and request amendments. Review teams and players in **Registration**. Public profiles omit birth dates, evidence, and manager identifiers.
 3. Approve six teams in each division/group. Generate the 60 round-robin matchups in **Scheduling**, preview the calendar, and apply it when every game has a valid slot.
-4. Add officials. Administrators grant scorekeeper roles; organizers assign accounts to games. Use **Scorekeeping desk** to acquire the exclusive control lease and start a game.
+4. Add officials. Administrators grant scorekeeper roles; organizers assign accounts to games. In **Scorekeeping desk**, acquire control, mark the players present that day, and select exactly five starters for each team. Save the lineup, then start the game. Only present players enter the game roster; the starters begin on court.
 5. Record player statistics and control the clock. At the final buzzer, finish the game. Organizers confirm the result after the API reconciles player points against team totals.
 6. Rankings update from confirmed results. Resolve ties and protests before playoff seeding. Schedule newly generated playoff games. Confirm playoff results to advance winners and populate the third-place game.
 7. Publish content, maintain the finance ledger, record discipline cases, and approve award recipients from their dedicated modules.

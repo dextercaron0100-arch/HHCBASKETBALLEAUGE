@@ -1,0 +1,146 @@
+.theme-toggle {
+  display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px;
+  padding: 0; border: 1px solid var(--border); border-radius: 50%;
+  background: #ffffff06; color: var(--foreground);
+}
+.theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+.theme-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #f3f6fa;
+  --foreground: #172638;
+  --panel: #ffffff;
+  --panel-light: #edf2f7;
+  --border: #d8e1eb;
+  --muted: #52657b;
+  --gold: #896000;
+  --schedule-accent: #896000;
+}
+:root[data-theme="light"] ::selection { background: #f4d77c; color: #172638; }
+:root[data-theme="light"] .league-page-background {
+  background-image: linear-gradient(#f3f6faed, #f3f6faf5), url('/optimized-images/b947ed4a77b00065-1600.webp');
+}
+:root[data-theme="light"] .selected-team-background { opacity: .08; }
+:root[data-theme="light"] :is(.league-header, .league-bottom-nav) {
+  background: #fffffff5; border-color: var(--border); box-shadow: 0 3px 20px #19324f08;
+}
+:root[data-theme="light"] :is(.league-wordmark strong, .league-wordmark > span) { color: #172638; }
+:root[data-theme="light"] .league-wordmark small { color: #76570b; }
+:root[data-theme="light"] :is(.league-nav-item, .league-mobile-nav a, .league-bottom-nav a, .league-login, .league-menu-toggle, .league-dropdown a, .league-dropdown button) { color: #40536b; }
+:root[data-theme="light"] :is(.league-nav-symbol, .league-user-icon) { color: #4b6079; border-color: #dce4ee; background: #edf2f780; }
+:root[data-theme="light"] .league-nav-item:is([aria-current="page"], .is-active, [aria-expanded="true"]) .league-nav-symbol,
+:root[data-theme="light"] :is(.league-mobile-nav, .league-bottom-nav) a[aria-current="page"] .league-nav-symbol { color: #172638; background: #f4c64e; border-color: #e6b63d; }
+:root[data-theme="light"] :is(.league-login, .league-menu-toggle, .theme-toggle) { background: #f3f6fa; border-color: var(--border); }
+:root[data-theme="light"] :is(.league-dropdown, .league-mobile-nav) { background: #fff; border-color: var(--border); }
+:root[data-theme="light"] :is(.league-dropdown a:hover, .league-dropdown button:hover, .league-mobile-nav a:hover) { color: #172638; background: #f2f5f9; }
+:root[data-theme="light"] :is(.league-nav-item[aria-current="page"], .league-nav-item.is-active, .league-bottom-nav a[aria-current="page"]) { color: #76520b; }
+:root[data-theme="light"] .horizontal-layout .topbar { background: #ffffff80; border-color: var(--border); }
+:root[data-theme="light"] .horizontal-layout .breadcrumb span { color: #172638; }
+:root[data-theme="light"] :is(h1, h2, h3, h4, legend) { color: #172638; }
+:root[data-theme="light"] :is(p, small) { color: var(--muted); }
+:root[data-theme="light"] .league-wordmark > span { background: none; -webkit-text-fill-color: #172638; }
+:root[data-theme="light"] :is(.schedule-season strong, .postseason-qualification strong, .draw-stage-header p, .team-directory-overview p, .schedule-day-heading > span) { color: #40536b; }
+:root[data-theme="light"] :is(.team-directory-counts span, .draw-stage-summary span, .draw-pool-header p, .draw-pool-teams small, .postseason-facts dt, .postseason-rules summary, .postseason-rules li, .postseason-format-stats span, .team-view-switch button, .conference-round-label, .conference-name > strong) { color: #52657b; }
+:root[data-theme="light"] .schedule-browser-bottom { border-color: var(--border); }
+:root[data-theme="light"] :is(.schedule-season span, .schedule-range, .schedule-division-tabs button span, .schedule-browser-bottom button, .schedule-toggle b, .draw-pool-teams li span, .community-qualifiers, .community-signoff, .community-team-preview > a, .rank, .footer, .footer span, .footer strong) { color: #52657b; }
+:root[data-theme="light"] :is(.community-division-grid > a, .postseason-qualification) { background: #f5f8fb; border-color: var(--border); }
+:root[data-theme="light"] :is(.community-division-grid > a > span:first-child, .elimination-rule-card strong, .elimination-rule-card li, .elimination-shared-rules strong, .elimination-shared-rules li) { color: #40536b; }
+:root[data-theme="light"] .conference-canvas .postseason-team > span:not(.team-mark),
+:root[data-theme="light"] .conference-canvas .postseason-team > b,
+:root[data-theme="light"] .conference-canvas .postseason-match-label > span { color: #40536b; }
+:root[data-theme="light"] :is(.conference-name > span, .conference-champion, .conference-champion strong, .postseason-match-time) { color: #76520b; }
+:root[data-theme="light"] .postseason-format summary { color: #40536b; }
+:root[data-theme="light"] :is(.overview-heading h1 span, .subtle, .section-title p, .table-sub, .table-note, .table-heading, .schedule-timezone) { color: var(--muted); }
+:root[data-theme="light"] :is(.positive, .scoresheet-substitution.is-on-court > span) { color: #18734b; }
+:root[data-theme="light"] :is(.error, .scoresheet-foul-limit) { color: #ab2738; }
+
+/* Paper surfaces and readable controls across public and organizer pages. */
+:root[data-theme="light"] :is(
+  .panel, .division-draw, .game-card, .team-profile-card, .roster-panel,
+  .team-directory-overview, .team-directory-toolbar, .draw-stage, .draw-pool,
+  .metric, .overview-metrics .metric, .fan-intro, .fan-team, .empty-state,
+  .elimination-rule-card, .elimination-shared-rules, .schedule-no-games,
+  .live-game-picker, .live-waiting, .scorekeeper-practice-guide, .scorekeeper-practice-banner,
+  .scorekeeper-empty, .postseason-panel, .postseason-configuration, .postseason-rules,
+  .filter-bar, .maintenance-card, .auth-card, .login-panel, .media-lightbox, .scoresheet-sub-dialog
+) { background: #fff; border-color: var(--border); color: var(--foreground); }
+:root[data-theme="light"] :is(.metric, .overview-metrics .metric, .team-profile-card, .game-card, .draw-stage, .postseason-panel) { box-shadow: 0 5px 20px #19324f06; }
+:root[data-theme="light"] :is(.metric-value, .metric-label, .metric-footer, .overview-metrics .metric-value, .team-profile-details, .team-profile-details h3, .team-directory-counts b, .match-team strong, .match-team b, .fan-team-heading strong, .fan-team-record strong, .draw-pool-teams strong, .draw-stage-summary strong, .draw-pool-header h3, .player-card strong, .statistics-pagination strong) { color: #172638; }
+:root[data-theme="light"] :is(.metric-icon, .overview-metrics .metric-icon, .shortcut-icon, .fan-star, .elimination-rule-icon, .scorekeeper-empty-icon, .postseason-title-icon, .maintenance-icon) { background: #fff8e5; border-color: #e8d49c; color: #896000; }
+:root[data-theme="light"] .overview-metrics .metric::before { background: linear-gradient(90deg, #deb955, transparent); }
+:root[data-theme="light"] .overview-metrics .metric.is-live { background: #f4fbf7; border-color: #a5d9be; }
+:root[data-theme="light"] :is(.league-shortcuts > a, .fan-team-action, .team-actions button, .team-actions a) { background: #fff; border-color: var(--border); color: #172638; }
+:root[data-theme="light"] :is(.league-shortcuts > a:hover, .fan-team-action:hover, .game-card:hover, .team-profile-card:hover) { background: #f8fafd; border-color: #ba9445; }
+:root[data-theme="light"] .shortcut-arrow { color: #53667e; border-color: var(--border); }
+:root[data-theme="light"] :is(.fan-team-heading, .fan-team-heading button, .fan-next-game p, .fan-next-game small, .fan-team-action, .team-card-kicker, .team-search-results) { color: #435770; }
+:root[data-theme="light"] :is(.team-search, .team-view-switch, .team-group-filters button, .roster-close, .team-slot-empty, .team-slot-empty .team-logo-box, .player-card, .news-card, .news-visual, .team-search-results) { background: #f3f6fa; border-color: var(--border); color: #435770; }
+:root[data-theme="light"] .team-profile-card .team-logo-box { background: #edf2f7; }
+:root[data-theme="light"] :is(.roster-role, .draw-pool-selected) { color: #76520b; background: #fff4d2; }
+:root[data-theme="light"] :is(.segmented, .tabs, .admin-tabs) { background: #e9eef5; border-color: var(--border); }
+:root[data-theme="light"] :is(.segmented button, .tabs button, .admin-tabs button) { color: #52657b; }
+:root[data-theme="light"] :is(.segmented button.active, .team-view-switch button[aria-pressed="true"]) { background: #f4c64e; color: #172638; }
+:root[data-theme="light"] :is(.tabs button.active, .admin-tabs button.active) { background: #fff4d2; color: #76520b; border-color: #d5ac52; }
+:root[data-theme="light"] :is(input, select, textarea) { background: #fff; color: #172638; border-color: #b9c7d8; }
+:root[data-theme="light"] :is(input, textarea)::placeholder { color: #697b90; }
+:root[data-theme="light"] :is(label, .module-form label, .filter-bar label) { color: #40536b; }
+:root[data-theme="light"] .button-primary { color: #172638; background: #f4c64e; border-color: #e6b63d; }
+:root[data-theme="light"] .button-primary:hover { background: #f7d573; }
+:root[data-theme="light"] :is(.button-outline, .button-ghost) { color: #354b64; border-color: #bdcad9; }
+:root[data-theme="light"] :is(.button-outline:hover, .button-ghost:hover) { background: #edf2f7; color: #172638; }
+:root[data-theme="light"] :is(th, .standings-table-wrap th) { background: #edf2f7; color: #455c76; border-color: var(--border); }
+:root[data-theme="light"] :is(td, .standings-table-wrap td) { color: #243b55; background: transparent; border-color: var(--border); }
+:root[data-theme="light"] :is(tbody tr:hover, .standings-table-wrap tr:hover td) { background: #f0f4f9; }
+:root[data-theme="light"] :is(.table-team, .table-team strong, .table-team button) { color: #172638; }
+:root[data-theme="light"] :is(.notice, .connection-notice) { color: #5c460e; background: #fff7df; border-color: #e7d59f; }
+:root[data-theme="light"] .notice.error { color: #9a2335; background: #fff1f3; border-color: #edbdc5; }
+:root[data-theme="light"] .scorekeeper-practice-banner h2 { color: #78520b; }
+:root[data-theme="light"] :is(.scorekeeper-practice-banner p, .scorekeeper-practice-guide, .scorekeeper-loading, .scorekeeper-empty p) { color: var(--muted); }
+:root[data-theme="light"] :is(.scoresheet-sub-dialog, .media-lightbox h2, .media-lightbox-heading button) { color: #172638; }
+:root[data-theme="light"] .scoresheet-sub-dialog::backdrop { background: #17263870; }
+
+/* Schedule and compact matchup rail. */
+:root[data-theme="light"] .schedule-browser { background: #fff; border-color: var(--border); --schedule-accent: #896000; }
+:root[data-theme="light"] :is(.schedule-browser-top, .schedule-toolbar, .schedule-filter-row, .schedule-date-rail, .schedule-results-heading, .schedule-day-heading) { border-color: var(--border); color: #435770; }
+:root[data-theme="light"] :is(.schedule-division-tabs button, .schedule-date, .schedule-toggle, .schedule-reset, .date-pager, .schedule-all-dates) { color: #435770; border-color: var(--border); background: #f4f7fa; }
+:root[data-theme="light"] :is(.schedule-date.selected, .schedule-date.is-today, .schedule-division-tabs button.active) { color: #76520b; border-color: #d5ac52; background: #fff7df; }
+:root[data-theme="light"] :is(.schedule-date strong, .schedule-date b, .game-card-top, .game-card-bottom, .game-venue, .schedule-toggle span) { color: #435770; }
+:root[data-theme="light"] :is(.badge, .team-logo-box > .badge) { background: #e7edf5; color: #40536b; }
+:root[data-theme="light"] .badge-live { background: #e1f5ea; color: #12673f; }
+:root[data-theme="light"] :is(.upcoming-strip, .upcoming-strip-game) { background: #fff; border-color: var(--border); }
+:root[data-theme="light"] .upcoming-strip-game:hover { background: #fffaf0; border-color: #ba9445; }
+:root[data-theme="light"] :is(.upcoming-strip-date, .upcoming-strip-toolbar button, .upcoming-strip-monogram) { background: #edf2f7; color: #4b6079; border-color: var(--border); }
+:root[data-theme="light"] :is(.upcoming-strip-team strong, .upcoming-strip-date strong, .upcoming-strip-toolbar h2) { color: #172638; }
+:root[data-theme="light"] :is(.upcoming-strip-tipoff, .upcoming-strip-tipoff time span, .upcoming-strip-footer, .upcoming-strip-footer > span:last-child, .upcoming-strip-toolbar a, .upcoming-strip-date small, .upcoming-strip-team > span:last-child) { color: #52657b; }
+:root[data-theme="light"] .upcoming-strip-footer { border-color: var(--border); }
+
+/* Group draws, qualification rules and playoff brackets. */
+:root[data-theme="light"] :is(.draw-pool-header, .draw-pool.is-selected .draw-pool-header, .postseason-format-stats, .postseason-match-label, .postseason-round-nav button > span, .quarter-score-grid > div, .box-team-tabs button) { background: #edf2f7; border-color: var(--border); color: #435770; }
+:root[data-theme="light"] :is(.draw-pool-letter, .draw-pool-logo) { background: #fff; color: #896000; border-color: var(--border); }
+:root[data-theme="light"] :is(.draw-pool-action button, .draw-stage-summary, .draw-stage-status, .draw-pool-teams li, .elimination-rule-card, .elimination-shared-rules) { color: #40536b; border-color: var(--border); }
+:root[data-theme="light"] :is(.draw-stage-status, .elimination-rule-card.is-current) { background: #f2faf5; border-color: #bcdbc9; }
+:root[data-theme="light"] :is(.postseason-match, .conference-canvas .postseason-match, .postseason-match.championship, .postseason-match.third-place, .conference-canvas .postseason-match.championship) { background: #fff; border-color: #cbd6e3; color: #172638; box-shadow: 0 3px 9px #19324f09; }
+:root[data-theme="light"] :is(.postseason-scroll:has(.conference-canvas), .postseason-format-stats, .postseason-rules) { background: #f8fafc; }
+:root[data-theme="light"] :is(.postseason-team, .postseason-team strong, .postseason-team-placeholder, .postseason-team-placeholder.seed, .postseason-facts dd, .postseason-format-stats b, .postseason-header p, .postseason-round-nav button, .postseason-format p, .postseason-footer, .postseason-status, .conference-name, .conference-round-label, .postseason-trophy strong) { color: #40536b; }
+:root[data-theme="light"] :is(.postseason-team.winner, .conference-canvas .postseason-team.winner, .postseason-bye) { background: #fff5d6; color: #77530e; }
+:root[data-theme="light"] .postseason-connection { stroke: #8b9db2; }
+:root[data-theme="light"] .trophy-turntable { background: radial-gradient(ellipse, #f4c64e16, transparent 70%); }
+:root[data-theme="light"] .maintenance-page { background: #f3f6fa; }
+:root[data-theme="light"] :is(.maintenance-card > p, .maintenance-status, .maintenance-signoff, .live-waiting-features span, .live-loading, .quarter-score-grid small) { color: var(--muted); }
+
+/* Photo heroes and the stadium scoreboard retain their intended contrast. */
+:root[data-theme="light"] .hero { --gold: #f4c64e; color: #fff; }
+:root[data-theme="light"] .hero :is(h1, h2, h3) { color: #fff; }
+:root[data-theme="light"] .hero :is(p, .hero-text-link, .hero-photo-caption) { color: #e0e7f0; }
+:root[data-theme="light"] :is(.live-arena, .scorekeeper-board) { --gold: #f4c64e; background: #172333; color: #edf1f7; }
+:root[data-theme="light"] :is(.live-arena, .scorekeeper-board) :is(h2, h3, strong, .clock, .button-outline, .button-ghost) { color: #edf1f7; }
+
+@media (max-width: 600px) {
+  .league-header-actions { gap: 8px; }
+  .theme-toggle { flex-basis: 40px; width: 40px; height: 44px; }
+}
+@media (max-width: 480px) {
+  .league-login { width: 40px; min-height: 44px; padding: 8px; justify-content: center; }
+  .league-login > span:last-child { display: none; }
+  .league-header-inner { gap: 8px; }
+}

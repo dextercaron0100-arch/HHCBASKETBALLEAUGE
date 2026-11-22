@@ -2,18 +2,22 @@ namespace League.Api;
 
 public static class Scheduling
 {
+    public static int Duration(Season season, Game game) => game.DurationMinutes ?? season.SlotMinutes;
+    public static int SessionStart(Session session) => session.StartHour * 60 + session.StartMinute;
+    public static int SessionEnd(Session session) => session.EndHour * 60 + session.EndMinute;
+    public static bool ValidSession(Session session) => session.StartHour is >= 0 and <= 23 && session.EndHour is >= 0 and <= 24 && session.StartMinute is >= 0 and <= 59 && session.EndMinute is >= 0 and <= 59 && (session.EndHour != 24 || session.EndMinute == 0) && SessionStart(session) < SessionEnd(session);
     public static bool ValidSlot(Season season, Game game)
     {
-        if (game.Start == null || !season.Courts.Any(c => c.Id == game.CourtId)) return false;
+        if (game.Start == null || Duration(season, game) is < 15 or > 1440 || !season.Courts.Any(c => c.Id == game.CourtId)) return false;
         var start = TimeZoneInfo.ConvertTime(game.Start.Value, TimeZoneInfo.FindSystemTimeZoneById(season.Timezone));
-        var end = start.AddMinutes(season.SlotMinutes);
-        return season.Days.Contains((int)start.DayOfWeek) && season.Sessions.Any(s => start.TimeOfDay >= TimeSpan.FromHours(s.StartHour) && end.Date == start.Date && end.TimeOfDay <= TimeSpan.FromHours(s.EndHour)) && !season.Closures.Any(c => c.CourtId == game.CourtId && game.Start < c.End && game.Start.Value.AddMinutes(season.SlotMinutes) > c.Start);
+        var end = start.AddMinutes(Duration(season, game));
+        return season.Days.Contains((int)start.DayOfWeek) && season.Sessions.Any(s => start.TimeOfDay >= TimeSpan.FromMinutes(SessionStart(s)) && end.Date == start.Date && end.TimeOfDay <= TimeSpan.FromMinutes(SessionEnd(s))) && !season.Closures.Any(c => c.CourtId == game.CourtId && game.Start < c.End && game.Start.Value.AddMinutes(Duration(season, game)) > c.Start);
     }
     public static bool Conflict(Season season, Game candidate, IEnumerable<Game> others)
     {
         if (candidate.Start == null) return true;
-        var end = candidate.Start.Value.AddMinutes(season.SlotMinutes);
-        return others.Any(g => g.Id != candidate.Id && g.Start != null && g.Status != "Cancelled" && ((g.CourtId == candidate.CourtId && candidate.Start < g.Start.Value.AddMinutes(season.SlotMinutes) && end > g.Start) || ((g.HomeId == candidate.HomeId || g.HomeId == candidate.AwayId || g.AwayId == candidate.HomeId || g.AwayId == candidate.AwayId) && candidate.Start < g.Start.Value.AddMinutes(season.SlotMinutes + season.RestMinutes) && end.AddMinutes(season.RestMinutes) > g.Start)));
+        var end = candidate.Start.Value.AddMinutes(Duration(season, candidate));
+        return others.Any(g => g.Id != candidate.Id && g.Start != null && g.Status != "Cancelled" && ((g.CourtId == candidate.CourtId && candidate.Start < g.Start.Value.AddMinutes(Duration(season, g)) && end > g.Start) || ((g.HomeId == candidate.HomeId || g.HomeId == candidate.AwayId || g.AwayId == candidate.HomeId || g.AwayId == candidate.AwayId) && candidate.Start < g.Start.Value.AddMinutes(Duration(season, g) + season.RestMinutes) && end.AddMinutes(season.RestMinutes) > g.Start)));
     }
     public static SchedulePreview Preview(LeagueState state, Season calendar, DateOnly from, int days, bool all = false)
     {
@@ -31,16 +35,16 @@ public static class Scheduling
             {
                 var date = from.AddDays(day);
                 if (!calendar.Days.Contains((int)date.DayOfWeek)) continue;
-                foreach (var session in calendar.Sessions.OrderBy(s => s.StartHour))
+                foreach (var session in calendar.Sessions.OrderBy(SessionStart))
                 {
-                    for (var minute = session.StartHour * 60; minute + calendar.SlotMinutes <= session.EndHour * 60 && !placed; minute += calendar.SlotMinutes)
+                    for (var minute = SessionStart(session); minute + Duration(calendar, game) <= SessionEnd(session) && !placed; minute += calendar.SlotMinutes)
                     {
                         var local = date.ToDateTime(TimeOnly.MinValue).AddMinutes(minute);
                         var start = new DateTimeOffset(local, zone.GetUtcOffset(local));
                         if (start <= now) continue;
                         foreach (var court in calendar.Courts)
                         {
-                            var candidate = new Game { Id = game.Id, HomeId = game.HomeId, AwayId = game.AwayId, Start = start, CourtId = court.Id };
+                            var candidate = new Game { Id = game.Id, HomeId = game.HomeId, AwayId = game.AwayId, Start = start, DurationMinutes = game.DurationMinutes, CourtId = court.Id };
                             if (!ValidSlot(calendar, candidate) || Conflict(calendar, candidate, fixedGames)) continue;
                             placements.Add(new(game.Id, start, court.Id)); fixedGames.Add(candidate); placed = true; break;
                         }

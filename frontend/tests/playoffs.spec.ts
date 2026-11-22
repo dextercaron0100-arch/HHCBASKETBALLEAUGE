@@ -8,10 +8,13 @@ test("playoffs navigation works for both divisions and mobile", async ({ page })
   await expect(page.getByRole("heading", { name: "Playoffs", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Junior playoff bracket", exact: true })).toBeVisible();
   await expect(page.locator(".postseason-match")).toHaveCount(8);
+  await expect(page.locator(".postseason-qualification")).toContainText("Top 2 per bracket + 2 wildcards advance");
   await page.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.getByRole("region", { name: "Open playoff bracket", exact: true })).toBeVisible();
   await expect(page.locator(".postseason-match")).toHaveCount(12);
-  await expect(page.getByRole("heading", { name: "Round of 12", exact: true })).toBeVisible();
+  await expect(page.locator(".conference-name.west")).toContainText("WEST");
+  await expect(page.locator(".conference-name.east")).toContainText("EAST");
+  await expect(page.locator(".conference-round-label").filter({ hasText: "Round of 12" })).toHaveCount(2);
   await expect(page.locator(".postseason-format")).toContainText("All four group champions receive quarterfinal byes");
   await expect(page.getByLabel("Round of 12 · Match 1: awaiting seeding", { exact: true })).toContainText("A2");
   await page.setViewportSize({ width: 390, height: 844 });
@@ -22,16 +25,24 @@ test("playoffs navigation works for both divisions and mobile", async ({ page })
 
 test("division brackets use the approved seeds, game numbers and semifinal paths", () => {
   const junior = playoffFormat("Junior");
-  expect(junior.slots.map(slot => slot.number).sort((a, b) => a - b)).toEqual([31, 32, 33, 34, 35, 36, 37, 38]);
+  expect(junior.groupSizes).toEqual([4, 4, 4]);
+  expect(junior.slots.map(slot => slot.number).sort((a, b) => a - b)).toEqual([19, 20, 21, 22, 23, 24, 25, 26]);
   expect(junior.connections).toContainEqual(["Q3", "S1"]);
   expect(junior.connections).toContainEqual(["Q2", "S2"]);
-  expect(junior.slots.find(slot => slot.key === "Q1")?.away).toContain("B4");
+  expect(junior.slots.find(slot => slot.key === "Q1")?.away).toContain("wildcard");
+  expect(junior.slots.filter(slot => slot.home.includes("bye"))).toHaveLength(0);
   const senior = playoffFormat("Senior");
   expect(senior.groupSizes).toEqual([4, 4, 4, 4]);
   expect(senior.slots.map(slot => slot.number).sort((a, b) => a - b)).toEqual(Array.from({ length: 12 }, (_, i) => 25 + i));
   expect(senior.slots.filter(slot => slot.home.includes("bye"))).toHaveLength(4);
   expect(senior.connections).toContainEqual(["R2", "Q1"]);
   expect(senior.slots.find(slot => slot.key === "F")?.number).toBe(36);
+  for (const format of [junior, senior]) {
+    const slot = (key: string) => format.slots.find(slot => slot.key === key)!;
+    expect(slot("S1").x).toBeLessThan(slot("F").x);
+    expect(slot("S2").x).toBeGreaterThan(slot("F").x);
+    expect(slot("Q1").x + slot("Q2").x + format.cardWidth).toBe(format.width);
+  }
 });
 
 test("recorded playoff teams and confirmed winner appear in the bracket", async ({ page, request }) => {
@@ -72,7 +83,9 @@ test("mobile round controls expose every matchup and reset for a new division", 
   await page.getByRole("button", { name: "Junior", exact: true }).click();
   await expect(rounds.getByRole("button", { name: /Quarterfinals/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".postseason-match:visible")).toHaveCount(4);
-  await expect(page.locator(".postseason-rules")).toContainText("Top four");
+  await rounds.getByRole("button", { name: /Semifinals/ }).click();
+  await expect(page.locator(".postseason-bye:visible")).toHaveCount(0);
+  await expect(page.locator(".postseason-qualification")).toContainText("Top 2");
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

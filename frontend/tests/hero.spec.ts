@@ -32,7 +32,7 @@ test("hero rotates every five seconds and supports an accessible pause without v
   await page.clock.runFor(5000);
   await expect(hero.locator(".hero-photo").nth(2)).toHaveClass(/is-visible/);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(hero.getByRole("link", { name: "Explore the schedule" })).toBeVisible();
+  await expect(hero.getByRole("link", { name: "See the schedule" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: "test-results/hero-mobile.png" });
 });

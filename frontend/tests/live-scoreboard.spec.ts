@@ -13,7 +13,7 @@ test("live scores, team filters and safe game switching work on a phone", async 
   const league = await (await request.get("/api/v1/public")).json();
   const teams = league.teams.filter((t: { division: string }) => t.division === "Junior");
   const players = teams.slice(0, 2).map((t: { id: string }) => league.players.find((p: { teamId: string }) => p.teamId === t.id));
-  const game = { id: "ui-live", seasonId: teams[0].seasonId, division: "Junior", stage: "Group", group: "A", homeId: teams[0].id, awayId: teams[1].id, status: "Live", homeScore: 82, awayScore: 76, quarter: 3, clockSeconds: 421, clockRunning: false, homeFouls: 2, awayFouls: 3, homeTimeouts: 1, awayTimeouts: 2, start: null, roster: players.map(p => p.id), stats: {}, quarterResults: [{ quarter: 1, home: 22, away: 19 }] };
+  const game = { id: "ui-live", seasonId: teams[0].seasonId, division: "Junior", stage: "Group", group: "A", homeId: teams[0].id, awayId: teams[1].id, status: "Live", homeScore: 82, awayScore: 76, quarter: 3, clockSeconds: 421, clockRunning: false, homeFouls: 2, awayFouls: 3, homeTimeouts: 1, awayTimeouts: 2, start: null, roster: players.map((p: { id: string }) => p.id), stats: {}, quarterResults: [{ quarter: 1, home: 22, away: 19 }] };
   const next = { ...game, id: "ui-next", status: "Scheduled" };
   await page.route("**/api/v1/public", route => route.fulfill({ json: { ...league, games: [game, next] } }));
   await page.route("**/api/v1/games/ui-live", route => route.fulfill({ json: game }));

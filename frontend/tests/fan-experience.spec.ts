@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 test("followed teams persist, open the right roster and can be unfollowed", async ({ page, request }) => {
   const league = await (await request.get("/api/v1/public")).json();
   const team = league.teams.find((team: { division: string }) => team.division === "Senior");
+  await page.route("**/api/v1/public", route => route.fulfill({ json: { ...league, games: [] } }));
   await page.goto(`/teams?division=Senior&team=${team.id}#team-roster`);
   const roster = page.getByRole("region", { name: `${team.name} roster`, exact: true });
   await expect(roster).toBeVisible();
@@ -37,7 +38,12 @@ test("navigation keeps recent league content visible while refreshing", async ({
   try {
     await expect(page).toHaveURL(/\/playoffs$/, { timeout: 20000 });
     await expect(page.getByRole("heading", { name: "Playoffs", exact: true })).toBeVisible();
-    await expect(page.getByRole("status").filter({ hasText: "Showing recently loaded league data" })).toBeVisible();
+    // The persistent shell keeps its data without fetching again on navigation.
+    expect(count).toBe(1);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await expect.poll(() => count).toBeGreaterThan(1);
+    await expect(page.getByRole("heading", { name: "Playoffs", exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: "Loading league content" })).toHaveCount(0);
   } finally { release(); }
   await expect(page.getByRole("status").filter({ hasText: "Showing recently loaded league data" })).toHaveCount(0);
 });

@@ -3,17 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Building2, CalendarDays, CircleDot, ClipboardList, GitBranch, Home, ImageIcon, LogIn, Menu, MoreHorizontal, Radio, ShieldCheck, Trophy, Users, X } from "lucide-react";
+import { Activity, CalendarDays, ChartNoAxesColumnIncreasing, ClipboardList, Home, LayoutGrid, LogIn, Menu, Newspaper, Radio, ShieldCheck, Trophy, Users, UsersRound, X, type LucideProps } from "lucide-react";
 import type { User } from "@/lib/types";
 import { api } from "@/lib/api";
+import ThemeToggle from "./theme-toggle";
+
+function BasketballIcon({ size = 24, strokeWidth = 1.9, ...props }: LucideProps) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3v18M6 5.3c8 3.2 8 10.2 0 13.4M18 5.3c-8 3.2-8 10.2 0 13.4" /></svg>;
+}
 
 const primary = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/schedule", label: "Games", icon: CircleDot },
-  { href: "/news", label: "News", icon: ImageIcon },
-  { href: "/standings", label: "Team standings", icon: Trophy },
-  { href: "/playoffs", label: "Playoffs", icon: GitBranch },
-  { href: "/teams", label: "Teams", icon: Users },
+  { href: "/schedule", label: "Games", icon: BasketballIcon },
+  { href: "/news", label: "News", icon: Newspaper },
+  { href: "/standings", label: "Team standings", icon: ChartNoAxesColumnIncreasing },
+  { href: "/playoffs", label: "Playoffs", icon: Trophy },
+  { href: "/teams", label: "Teams", icon: UsersRound },
+  { href: "/players", label: "Players", icon: Users },
 ];
 
 export default function LeagueNavigation({ user, onLogout }: { user: User | null; onLogout: () => void }) {
@@ -61,13 +67,13 @@ export default function LeagueNavigation({ user, onLogout }: { user: User | null
     <header className={`league-header ${scrolled ? "is-scrolled" : ""}`} ref={container}>
       <div className="league-header-inner">
         <Link className="league-brand" href="/" aria-label="HHC BASKETBALL LEAGUE">
-          <Building2 className="league-building" size={40} strokeWidth={1.6} aria-hidden="true" />
+          <img className="league-brand-crest" src="/images/hhc-league-mark.svg" width={50} height={56} alt="" aria-hidden="true" />
           <span className="league-wordmark"><span>HHC</span><strong>BASKETBALL</strong><small>LEAGUE</small></span>
         </Link>
         <nav className="league-desktop-nav" aria-label="Main navigation">
-          {primary.map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? "page" : undefined} className="league-nav-item"><item.icon size={21} strokeWidth={1.7} /><span>{item.label}</span></Link>)}
+          {primary.map(item => <Link key={item.href} href={item.href} prefetch={true} aria-current={path === item.href ? "page" : undefined} className="league-nav-item"><span className="league-nav-symbol" aria-hidden="true"><item.icon size={23} strokeWidth={1.9} /></span><span>{item.label}</span></Link>)}
           <div className="league-more">
-            <button ref={moreButton} className={`league-nav-item ${extra.some(item => item.href === path) && !primary.some(item => item.href === path) ? "is-active" : ""}`} onClick={() => setOpen(!open)} onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); requestAnimationFrame(() => container.current?.querySelector<HTMLAnchorElement>(".league-dropdown a")?.focus()); } }} aria-expanded={open} aria-controls="league-more-links"><MoreHorizontal size={23} /><span>More</span></button>
+            <button ref={moreButton} className={`league-nav-item ${extra.some(item => item.href === path) && !primary.some(item => item.href === path) ? "is-active" : ""}`} onClick={() => setOpen(!open)} onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); requestAnimationFrame(() => container.current?.querySelector<HTMLAnchorElement>(".league-dropdown a")?.focus()); } }} aria-expanded={open} aria-controls="league-more-links"><span className="league-nav-symbol" aria-hidden="true"><LayoutGrid size={22} strokeWidth={1.9} /></span><span>More</span></button>
             {open && <div id="league-more-links" className="league-dropdown" onKeyDown={event => {
               if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
               const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("a, button"));
@@ -76,23 +82,24 @@ export default function LeagueNavigation({ user, onLogout }: { user: User | null
               const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
               items[next]?.focus();
             }}>
-              {extra.map(item => <Link key={item.href} href={item.href} onClick={() => setOpen(false)} aria-current={path === item.href ? "page" : undefined}><item.icon size={18} />{item.label}</Link>)}
+              {extra.map(item => <Link key={item.href} href={item.href} prefetch={true} onClick={() => setOpen(false)} aria-current={path === item.href ? "page" : undefined}><item.icon size={18} />{item.label}</Link>)}
               {user && <button onClick={signOut}><LogIn size={18} />Sign out</button>}
             </div>}
           </div>
         </nav>
         <div className="league-header-actions">
-          <Link href={user ? "/manager" : "/login"} className="league-login"><span className="league-user-icon"><Users size={16} /></span><span>{user ? "My account" : "Login"}</span></Link>
+          <ThemeToggle />
+          <Link href={user ? "/manager" : "/login"} className="league-login" aria-label={user ? "My account" : "Login"}><span className="league-user-icon"><Users size={16} /></span><span>{user ? "My account" : "Login"}</span></Link>
           <button ref={mobileButton} className="league-menu-toggle" aria-label={mobile ? "Close navigation" : "Open navigation"} aria-expanded={mobile} aria-controls="league-mobile-links" onClick={() => setMobile(!mobile)}>{mobile ? <X /> : <Menu />}</button>
         </div>
       </div>
       {mobile && <nav id="league-mobile-links" className="league-mobile-nav" aria-label="Mobile navigation">
-        {[...primary, ...extra.filter(item => !primary.some(main => main.href === item.href))].map(item => <Link key={item.href} href={item.href} onClick={() => setMobile(false)} aria-current={path === item.href ? "page" : undefined}><item.icon size={19} />{item.label}</Link>)}
+        {[...primary, ...extra.filter(item => !primary.some(main => main.href === item.href))].map(item => <Link key={item.href} href={item.href} prefetch={true} onClick={() => setMobile(false)} aria-current={path === item.href ? "page" : undefined}><span className="league-nav-symbol" aria-hidden="true"><item.icon size={21} strokeWidth={1.9} /></span>{item.label}</Link>)}
         {user && <button onClick={signOut}><LogIn size={19} />Sign out</button>}
       </nav>}
     </header>
     <nav className="league-bottom-nav" aria-label="Quick navigation">
-      {[primary[0], primary[1], primary[3], primary[4], primary[5]].map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? "page" : undefined}><item.icon size={20} strokeWidth={1.8} aria-hidden="true" /><span>{item.href === "/standings" ? "Standings" : item.label}</span></Link>)}
+      {[primary[0], primary[1], primary[3], primary[4], primary[5]].map(item => <Link key={item.href} href={item.href} prefetch={true} aria-current={path === item.href ? "page" : undefined}><span className="league-nav-symbol" aria-hidden="true"><item.icon size={22} strokeWidth={1.9} /></span><span>{item.href === "/standings" ? "Standings" : item.label}</span></Link>)}
     </nav>
     </>
   );

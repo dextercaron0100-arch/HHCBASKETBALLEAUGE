@@ -29,7 +29,9 @@ async function signIn(ctx: APIRequestContext, email: string, password: string) {
 }
 test("public pages, division switching, responsive layouts, and keyboard access", async ({
   page,
+  request,
 }) => {
+  const league = await (await request.get("/api/v1/public")).json();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
@@ -45,10 +47,11 @@ test("public pages, division switching, responsive layouts, and keyboard access"
   await expect(page.getByRole("table")).toBeVisible();
   await page.getByRole("button", { name: "Open", exact: true }).click();
   await page.getByRole("button", { name: "Group B", exact: true }).click();
-  await expect(page.locator("tbody tr")).toHaveCount(6);
+  const openGroupB = league.teams.filter((team: { division: string; group: string }) => team.division === "Senior" && team.group === "B");
+  await expect(page.locator("tbody tr")).toHaveCount(openGroupB.length);
   await page.goto("/schedule");
   await page.getByLabel("Status", { exact: true }).selectOption("Confirmed");
-  await expect(page.locator(".game-card")).not.toHaveCount(0);
+  await expect(page.locator(".game-card")).toHaveCount(league.games.filter((game: { status: string }) => game.status === "Confirmed").length);
   for (const path of ["/teams", "/statistics", "/news", "/live"]) {
     await page.goto(path);
     await expect(page.locator("h1")).toBeVisible();
@@ -62,6 +65,7 @@ test("public pages, division switching, responsive layouts, and keyboard access"
   await page.getByRole("button", { name: "Open navigation" }).click();
   await expect(page.getByRole("navigation", { name: "Mobile navigation" })).toBeVisible();
   await page
+    .getByRole("navigation", { name: "Mobile navigation", exact: true })
     .getByRole("link", { name: "Games", exact: true })
     .click();
   await expect(
@@ -139,10 +143,10 @@ test("identity, registration, scheduling, scoring, awards, media and finance wor
   expect(teams).toHaveLength(24);
   for (const team of teams) {
     await post(admin, "/admin/command", { action: "approveTeam", id: team.id });
-    await post(manager, "/manager/player", {
+    for (let jersey = 1; jersey <= 5; jersey++) await post(manager, "/manager/player", {
       teamId: team.id,
-      name: `QA player ${team.division} ${team.group} ${team.name}`,
-      number: 1,
+      name: `QA player ${jersey} ${team.division} ${team.group} ${team.name}`,
+      number: jersey,
       position: "PG",
       birthDate: team.division === "Junior" ? "2015-01-01" : "2000-01-01",
     });
@@ -244,9 +248,11 @@ test("identity, registration, scheduling, scoring, awards, media and finance wor
         reason,
         playerId,
         side: "",
+        ...(kind === "lineup" ? { presentPlayerIds: players.filter(p => [game.homeId, game.awayId].includes(p.teamId)).map(p => p.id), starterPlayerIds: [game.homeId, game.awayId].flatMap(id => players.filter(p => p.teamId === id).slice(0, 5).map(p => p.id)) } : {}),
       })
     ).json();
   };
+  await score("lineup");
   await score("start");
   await score("points", 2, "", homePlayer.id);
   const duplicate = {
@@ -286,7 +292,7 @@ test("identity, registration, scheduling, scoring, awards, media and finance wor
   await post(manager, "/manager/amendment", {
     ...homePlayer,
     name: "QA amended name",
-    number: 2,
+    number: 6,
   });
   state = await (await admin.get("/api/v1/admin/state")).json();
   expect(state.players.find((p) => p.id === homePlayer.id)?.name).not.toBe(

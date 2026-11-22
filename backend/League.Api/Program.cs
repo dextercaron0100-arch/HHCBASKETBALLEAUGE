@@ -102,7 +102,10 @@ app.MapPost("/api/v1/games/{id}/lease", async (string id, JsonElement input, Cla
 }).RequireAuthorization();
 app.MapPost("/api/v1/games/{id}/score", async (string id, ScoreCommand command, ClaimsPrincipal principal, LeagueStore store, IHubContext<GameHub> hub) =>
 {
-    var state = await store.Change(UserId(principal), "score", id, command.Reason, s => { var g = s.Games.Single(g => g.Id == id); CheckScorer(principal, g); Scoring.Apply(s, g, command, UserId(principal), DateTimeOffset.UtcNow); }); var view = GameView(state.Games.Single(g => g.Id == id)); await hub.Clients.Group(id).SendAsync("GameChanged", view); return Results.Ok(view);
+    if (command.Kind == "overrideFinish" && !IsStaff(principal)) return Results.Forbid();
+    var state = await store.Change(UserId(principal), command.Kind == "overrideFinish" ? "overrideFinish" : "score", id, command.Reason, s => { var g = s.Games.Single(g => g.Id == id); CheckScorer(principal, g); Scoring.Apply(s, g, command, UserId(principal), DateTimeOffset.UtcNow, IsStaff(principal)); }); var view = GameView(state.Games.Single(g => g.Id == id)); await hub.Clients.Group(id).SendAsync("GameChanged", view);
+    if (command.Kind is "finish" or "overrideFinish") await hub.Clients.All.SendAsync("LeagueChanged", state.Revision);
+    return Results.Ok(view);
 }).RequireAuthorization();
 app.MapGet("/api/v1/scoring", async (LeagueStore store, ClaimsPrincipal principal) => { var state = await store.Read(); return Results.Ok(state.Games.Where(g => IsStaff(principal) || g.ScorekeeperId == UserId(principal)).Select(GameView)); }).RequireAuthorization(p => p.RequireRole("Administrator", "Organizer", "Scorekeeper"));
 app.MapGet("/api/v1/admin/finance.csv", async (LeagueStore store) => { var state = await store.Read(); string Csv(string v) => "\"" + (v.StartsWith('=') || v.StartsWith('+') || v.StartsWith('-') || v.StartsWith('@') ? "'" : "") + v.Replace("\"", "\"\"") + "\""; var rows = new[] { "Date,Type,Team,Amount,Description" }.Concat(state.Finance.Select(e => $"{e.Date},{Csv(e.Type)},{Csv(state.Teams.SingleOrDefault(t => t.Id == e.TeamId)?.Name ?? "")},{e.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture)},{Csv(e.Description)}")); return Results.File(Encoding.UTF8.GetBytes(string.Join("\r\n", rows)), "text/csv", "league-finance.csv"); }).RequireAuthorization("Staff");
@@ -125,12 +128,35 @@ using (var scope = app.Services.CreateScope())
     }
     if (command == "seed-demo") { await scope.ServiceProvider.GetRequiredService<LeagueStore>().Change("CLI", "seedDemo", "", "Explicit fictional dataset", Demo.Seed); Console.WriteLine("Fictional demo data seeded."); return; }
     if (command == "migrate") { Console.WriteLine("Database ready."); return; }
+    if (command == "approve-results")
+    {
+        if (args.Length < 3 || string.IsNullOrWhiteSpace(args[1])) throw new ArgumentException("Usage: approve-results <reason> <game-id> [game-id ...]");
+        var ids = args.Skip(2).Distinct().ToArray();
+        await scope.ServiceProvider.GetRequiredService<LeagueStore>().Change("CLI", "approveResults", string.Join(',', ids), args[1], state =>
+        {
+            foreach (var id in ids) Scoring.ApproveResult(state, state.Games.Single(g => g.Id == id), args[1]);
+        });
+        Console.WriteLine($"Approved {ids.Length} team results; unconfirmed player statistics remain pending."); return;
+    }
+    if (command == "configure-scoring")
+    {
+        if (args.Length != 6 || !int.TryParse(args[2], out var foulLimit) || foulLimit < 1 || !int.TryParse(args[3], out var timeoutLimit) || timeoutLimit < 1 || args[4] is not ("Game" or "Half") || (args[5] != "carry" && (!int.TryParse(args[5], out var overtime) || overtime < 0)))
+            throw new ArgumentException("Usage: configure-scoring <season-id> <foul-limit> <timeout-limit> <Game|Half> <overtime-limit|carry>");
+        await scope.ServiceProvider.GetRequiredService<LeagueStore>().Change("CLI", "configureScoring", args[1], "League scoring rules supplied by organizer", state =>
+        {
+            var season = state.Seasons.Single(s => s.Id == args[1]);
+            if (state.Games.Any(g => g.SeasonId == season.Id && g.Status == "Live")) throw new RuleException("Configure rules before a game starts.");
+            season.FoulLimit = foulLimit; season.TimeoutLimit = timeoutLimit; season.TimeoutPeriod = args[4];
+            season.OvertimeTimeoutLimit = args[5] == "carry" ? null : int.Parse(args[5]);
+        });
+        Console.WriteLine("Season scoring rules updated."); return;
+    }
 }
 await app.RunAsync();
 
 static string UserId(ClaimsPrincipal principal) => principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
 static bool IsStaff(ClaimsPrincipal p) => p.IsInRole("Administrator") || p.IsInRole("Organizer");
 static void CheckScorer(ClaimsPrincipal principal, Game game) { if (!IsStaff(principal) && !(principal.IsInRole("Scorekeeper") && game.ScorekeeperId == UserId(principal))) throw new RuleException("You are not assigned to score this game."); }
-static object GameView(Game g) => new { g.Id, g.SeasonId, g.Division, g.Group, g.Stage, g.BracketKey, g.Number, g.HomeId, g.AwayId, g.Start, g.CourtId, g.Status, g.HomeScore, g.AwayScore, g.Quarter, g.ClockSeconds, g.ClockRunning, g.ClockAt, g.HomeFouls, g.AwayFouls, g.HomeTimeouts, g.AwayTimeouts, g.Version, g.Roster, g.RosterSnapshots, g.Stats, g.QuarterResults, g.ScorekeeperId, g.OfficialIds, ServerTime = DateTimeOffset.UtcNow };
-static object PublicView(LeagueState s) => new { s.Revision, s.Demo, Seasons = s.Seasons.Select(x => new { x.Id, x.Name, x.Year, x.RegistrationOpen, x.QuarterSeconds, x.OvertimeSeconds, x.Courts, x.Timezone, x.GroupSizes }), Teams = s.Teams.Where(t => t.Status == "Approved").Select(t => new { t.Id, t.Slot, t.SeasonId, t.Division, t.Group, t.Name, t.Coach, t.AssistantCoach, t.Logo, t.Color }), Players = s.Players.Where(p => p.Status == "Approved" && s.Teams.Any(t => t.Id == p.TeamId && t.Status == "Approved")).Select(p => new { p.Id, p.TeamId, p.Name, p.Number, p.Position, p.Photo, p.RosterRole }), Games = s.Games.Select(GameView), Posts = s.Posts.Where(p => p.Published), s.Awards };
+static object GameView(Game g) => new { g.Id, g.SeasonId, g.Division, g.Group, g.Stage, g.BracketKey, g.Number, g.HomeId, g.AwayId, g.Start, g.DurationMinutes, g.CourtId, g.Status, g.ResultApproved, g.HomeScore, g.AwayScore, g.Quarter, g.ClockSeconds, g.ClockRunning, g.ClockAt, g.HomeFouls, g.AwayFouls, g.HomeTimeouts, g.AwayTimeouts, g.Version, g.Roster, g.OnCourt, g.StartingFive, g.RosterSnapshots, g.Stats, g.QuarterResults, g.ScorekeeperId, g.OfficialIds, ServerTime = DateTimeOffset.UtcNow };
+static object PublicView(LeagueState s) => new { s.Revision, s.Demo, Seasons = s.Seasons.Select(x => new { x.Id, x.Name, x.Year, x.RegistrationOpen, x.QuarterSeconds, x.OvertimeSeconds, x.FoulLimit, x.TimeoutLimit, x.TimeoutPeriod, x.OvertimeTimeoutLimit, x.Courts, x.Timezone, x.GroupSizes }), Teams = s.Teams.Where(t => t.Status == "Approved").Select(t => new { t.Id, t.Slot, t.SeasonId, t.Division, t.Group, t.Name, t.Coach, t.AssistantCoach, t.Logo, t.Color }), Players = s.Players.Where(p => p.Status == "Approved" && s.Teams.Any(t => t.Id == p.TeamId && t.Status == "Approved")).Select(p => new { p.Id, p.TeamId, p.Name, p.Number, p.Position, p.Photo, p.RosterRole }), Games = s.Games.Select(GameView), Posts = s.Posts.Where(p => p.Published), s.Awards };
 public record Credentials(string Email, string Password);
