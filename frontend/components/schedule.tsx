@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { League } from "@/lib/types";
+import { scheduleMatchups } from "@/lib/schedule-matchups";
 import { Empty, GameCard, PageHeading } from "./league-app";
 
 function dateKey(value: string | Date, timezone: string) {
@@ -104,7 +105,8 @@ export default function Schedule({
     });
   }, [windowStart, date]);
 
-  const matching = league.games.filter(
+  const matchups = scheduleMatchups(league);
+  const matching = matchups.filter(
     (g) =>
       (division === "All" || g.division === division) &&
       (!group || g.group === group) &&
@@ -127,7 +129,7 @@ export default function Schedule({
     }
   const games = filtered
     .filter((g) => !date || (g.start && dateKey(g.start, timezone) === date))
-    .sort((a, b) => (a.start || "z").localeCompare(b.start || "z"));
+    .sort((a, b) => (a.start ? Date.parse(a.start) : Infinity) - (b.start ? Date.parse(b.start) : Infinity));
   const grouped = new Map<string, typeof games>();
   for (const game of games) {
     const key = game.start ? dateKey(game.start, timezone) : "unscheduled";
@@ -196,7 +198,7 @@ export default function Schedule({
                 {value === "All" ? "All games" : divisionLabel(value)}
                 <span>
                   {
-                    league.games.filter(
+                    matchups.filter(
                       (g) => value === "All" || g.division === value,
                     ).length
                   }
@@ -427,14 +429,14 @@ export default function Schedule({
         <div className="schedule-no-games">
           <Empty
             title={
-              !league.games.length ? "The schedule is on its way" : liveOnly
+              !matchups.length ? "The schedule is on its way" : liveOnly
                 ? "No games are live right now"
                 : date
                   ? "No games on this date"
                   : "No games match these filters"
             }
             description={
-              !league.games.length ? "Official fixtures will appear here once released by the organizers. Follow your team to keep its next game close." : liveOnly
+              !matchups.length ? "Official fixtures will appear here once released by the organizers. Follow your team to keep its next game close." : liveOnly
                 ? "Check back at tip-off, or explore upcoming matchups."
                 : "Try another day, team, or division to find your game."
             }
@@ -450,7 +452,7 @@ export default function Schedule({
                 <ChevronRight size={16} />
               </button>
             )}
-            {!league.games.length ? <><Link className="button button-primary" href="/teams">Find your team <ChevronRight size={16} /></Link><Link className="button button-outline" href="/playoffs">Explore the playoffs</Link></> : <button className="button button-outline" onClick={reset}>
+            {!matchups.length ? <><Link className="button button-primary" href="/teams">Find your team <ChevronRight size={16} /></Link><Link className="button button-outline" href="/playoffs">Explore the playoffs</Link></> : <button className="button button-outline" onClick={reset}>
               View all games
             </button>}
           </div>

@@ -43,7 +43,14 @@ public class Season
     public List<Closure> Closures { get; set; } = [];
     public Dictionary<string, List<string>> TieDecisions { get; set; } = [];
     public Dictionary<string, List<int>> GroupSizes { get; set; } = [];
+    public List<PostseasonWeek> PostseasonSchedule { get; set; } = [];
+    public int SemifinalBestOf { get; set; } = 1;
+    public int FinalBestOf { get; set; } = 1;
 }
+public record PostseasonWeek(string Title, List<PostseasonDay> Days);
+public record PostseasonDay(DateOnly Date, List<PostseasonEntry> Entries, string? Summary = null);
+public record PostseasonEntry(TimeOnly Time, string Stage, string Matchup, string? GameId = null, bool Highlighted = false,
+    string? Division = null, string? BracketKey = null);
 public record Session(int StartHour, int EndHour, int StartMinute = 0, int EndMinute = 0);
 public record Court(string Id, string Venue, string Name);
 public record Closure(string CourtId, DateTimeOffset Start, DateTimeOffset End);

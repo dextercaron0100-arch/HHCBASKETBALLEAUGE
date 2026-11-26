@@ -19,6 +19,77 @@ public static class Scheduling
         var end = candidate.Start.Value.AddMinutes(Duration(season, candidate));
         return others.Any(g => g.Id != candidate.Id && g.Start != null && g.Status != "Cancelled" && ((g.CourtId == candidate.CourtId && candidate.Start < g.Start.Value.AddMinutes(Duration(season, g)) && end > g.Start) || ((g.HomeId == candidate.HomeId || g.HomeId == candidate.AwayId || g.AwayId == candidate.HomeId || g.AwayId == candidate.AwayId) && candidate.Start < g.Start.Value.AddMinutes(Duration(season, g) + season.RestMinutes) && end.AddMinutes(season.RestMinutes) > g.Start)));
     }
+    public static void PublishPostseason(LeagueState state, string seasonId, long expectedRevision, List<PostseasonWeek> weeks,
+        int? semifinalBestOf = null, int? finalBestOf = null)
+    {
+        if (state.Revision != expectedRevision) throw new RuleException("League data changed. Review the timetable against the current fixtures.");
+        var season = state.Seasons.Single(s => s.Id == seasonId);
+        if ((semifinalBestOf ?? season.SemifinalBestOf) is not (1 or 3) || (finalBestOf ?? season.FinalBestOf) is not (1 or 3))
+            throw new RuleException("Choose a single game or best of three for each round.");
+        var seasonGames = state.Games.Where(game => game.SeasonId == seasonId).ToList();
+        if (((semifinalBestOf.HasValue && semifinalBestOf != season.SemifinalBestOf) ||
+             (finalBestOf.HasValue && finalBestOf != season.FinalBestOf)) &&
+            seasonGames.Any(game => game.Stage is "Semifinal" or "Championship"))
+            throw new RuleException("Set the series format before semifinal or championship fixtures are generated.");
+        if (weeks.Count == 0 || weeks.Any(week => string.IsNullOrWhiteSpace(week.Title) || week.Days.Count == 0))
+            throw new RuleException("Provide titled weeks with at least one day each.");
+        var days = weeks.SelectMany(week => week.Days).ToList();
+        if (days.Zip(days.Skip(1)).Any(pair => pair.First.Date >= pair.Second.Date))
+            throw new RuleException("List each date once in chronological order.");
+
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(season.Timezone);
+        var linkedGames = new List<Game>();
+        var publishedSlots = new HashSet<(string Division, string BracketKey)>();
+        foreach (var day in days)
+        {
+            if (day.Entries.Count == 0 || day.Entries.Any(entry => string.IsNullOrWhiteSpace(entry.Stage) || string.IsNullOrWhiteSpace(entry.Matchup)) ||
+                day.Entries.Zip(day.Entries.Skip(1)).Any(pair => pair.First.Time >= pair.Second.Time))
+                throw new RuleException("Provide labeled entries in chronological order for each date.");
+            foreach (var entry in day.Entries.Where(entry => entry.GameId != null))
+            {
+                var game = seasonGames.SingleOrDefault(game => game.Id == entry.GameId);
+                if (game == null || linkedGames.Contains(game))
+                    throw new RuleException("Each linked game must be a distinct fixture in this season.");
+                var local = day.Date.ToDateTime(entry.Time);
+                var start = new DateTimeOffset(local, timeZone.GetUtcOffset(local));
+                if (game.Start != start)
+                {
+                    if (game.Status != "Scheduled" || game.Events.Count > 0)
+                        throw new RuleException("Only an unstarted fixture can be rescheduled.");
+                    game.Start = start;
+                    game.Version++;
+                }
+                linkedGames.Add(game);
+            }
+            foreach (var entry in day.Entries.Where(entry => entry.BracketKey != null))
+            {
+                if (entry.Division is not ("Junior" or "Senior") || string.IsNullOrWhiteSpace(entry.BracketKey) ||
+                    !publishedSlots.Add((entry.Division, entry.BracketKey)))
+                    throw new RuleException("Each playoff slot needs a unique division and bracket key.");
+            }
+        }
+        if (linkedGames.Any(game => !ValidSlot(season, game) || Conflict(season, game, seasonGames)))
+            throw new RuleException("A linked fixture falls outside the court calendar or conflicts with another game.");
+        season.PostseasonSchedule = weeks;
+        season.SemifinalBestOf = semifinalBestOf ?? season.SemifinalBestOf;
+        season.FinalBestOf = finalBestOf ?? season.FinalBestOf;
+    }
+
+    public static void SetPublishedSlot(Season season, Game game)
+    {
+        foreach (var day in season.PostseasonSchedule.SelectMany(week => week.Days))
+        {
+            var slot = day.Entries.SingleOrDefault(entry => entry.Division == game.Division && entry.BracketKey == game.BracketKey);
+            if (slot == null || season.Courts.Count != 1) continue;
+            var local = day.Date.ToDateTime(slot.Time);
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(season.Timezone);
+            game.Start = new DateTimeOffset(local, zone.GetUtcOffset(local));
+            game.CourtId = season.Courts[0].Id;
+            game.DurationMinutes = game.Division == "Junior" ? 60 : 90;
+            return;
+        }
+    }
+
     public static SchedulePreview Preview(LeagueState state, Season calendar, DateOnly from, int days, bool all = false)
     {
         if (days < 1 || days > 180) throw new RuleException("Scheduling horizon must be 1–180 days.");

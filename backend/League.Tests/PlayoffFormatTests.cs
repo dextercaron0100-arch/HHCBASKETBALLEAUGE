@@ -53,6 +53,32 @@ public class PlayoffFormatTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void OpenStandingsUseOverallDifferentialForPairsAndMiniLeagueForThree(bool firstTeamWins)
+    {
+        var state = Completed("Senior", 4, 4, 4, 4);
+        void Score(string home, string away, int homePoints, int awayPoints)
+        {
+            var game = state.Games.Single(g => g.HomeId == home && g.AwayId == away);
+            game.HomeScore = homePoints;
+            game.AwayScore = awayPoints;
+        }
+
+        Score("A1", "A2", firstTeamWins ? 85 : 80, firstTeamWins ? 80 : 85);
+        Score("A1", "A3", 85, 71);
+        Score("A1", "A4", 88, 76);
+        Score("A2", "A3", 88, 96);
+        Score("A2", "A4", 90, 75);
+        Score("A3", "A4", 90, 92);
+
+        Assert.Equal(new[] { "A1", "A2", "A3", "A4" },
+            Competition.Standings(state, "season", "Senior", "A").Select(row => row.TeamId));
+        Competition.Advance(state, "season", "Senior");
+        Assert.Equal("A3", state.Games.Single(game => game.BracketKey == "R3").AwayId);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void SeniorFourGroupsAdvanceTwelveWithFourByesAndNoEarlyRematches(bool homeWins)
     {
         var state = Completed("Senior", 4, 4, 4, 4);
@@ -86,6 +112,46 @@ public class PlayoffFormatTests
         Assert.Equal(Competition.Loser(semi1), bronze.HomeId);
         Assert.Equal(Competition.Loser(semi2), bronze.AwayId);
         Assert.Equal("A1", state.Games.Single(g => g.BracketKey == "F").HomeId);
+    }
+
+    [Fact]
+    public void BestOfThreeSemifinalsAndFinalsAdvanceAfterTwoWins()
+    {
+        var state = Completed("Senior", 4, 4, 4, 4);
+        var season = state.Seasons.Single();
+        season.SemifinalBestOf = season.FinalBestOf = 3;
+        season.PostseasonSchedule = [new("Semifinal deciders",
+            [new(new(2026, 12, 6), [new(new(14, 30), "Open Semifinal Game 3", "TBD", Division: "Senior", BracketKey: "S2-3")])])];
+        Game Match(string key) => state.Games.Single(game => game.BracketKey == key);
+        void Result(Game game, bool homeWins)
+        {
+            game.HomeScore = homeWins ? 80 : 60;
+            game.AwayScore = homeWins ? 60 : 80;
+            game.Status = "Final";
+            Scoring.ApproveResult(state, game, "Verified final");
+        }
+        Competition.Advance(state, season.Id, "Senior");
+        foreach (var game in state.Games.Where(g => g.Stage == "Round of 12").ToList()) Result(game, true);
+        foreach (var game in state.Games.Where(g => g.Stage == "Quarterfinal").ToList()) Result(game, true);
+        Assert.DoesNotContain(state.Games, game => game.BracketKey is "S1-2" or "S2-2" or "F");
+
+        Result(Match("S1"), true);
+        Result(Match("S1-2"), true);
+        Result(Match("S2"), true);
+        Result(Match("S2-2"), false);
+        Assert.DoesNotContain(state.Games, game => game.BracketKey is "S1-3" or "F" or "T");
+        Assert.Equal(new DateTimeOffset(2026, 12, 6, 14, 30, 0, TimeSpan.FromHours(8)), Match("S2-3").Start);
+        Result(Match("S2-3"), false);
+        Assert.Equal(Match("S1").HomeId, Match("F").HomeId);
+        Assert.Equal(Match("S2").AwayId, Match("F").AwayId);
+        Assert.Equal(Match("S1").AwayId, Match("T").HomeId);
+        Assert.Equal(Match("S2").HomeId, Match("T").AwayId);
+
+        Result(Match("F"), true);
+        Assert.Null(Competition.SeriesResult(state, season.Id, "Senior", "F", 3));
+        Result(Match("F-2"), true);
+        Assert.DoesNotContain(state.Games, game => game.BracketKey == "F-3");
+        Assert.Equal(Match("F").HomeId, Competition.SeriesResult(state, season.Id, "Senior", "F", 3)?.Winner);
     }
 
     [Fact]

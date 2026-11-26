@@ -39,6 +39,7 @@ import type {
   Game,
   League,
   Leader,
+  MatchupCardGame,
   Player,
   Standing,
   Team,
@@ -393,7 +394,7 @@ export function GameCard({
   hideScores = false,
   showVenue = false,
 }: {
-  game: Game;
+  game: MatchupCardGame;
   league: League;
   hideScores?: boolean;
   showVenue?: boolean;
@@ -403,11 +404,9 @@ export function GameCard({
   const scored = ["Live", "Final", "Confirmed"].includes(game.status);
   const season = league.seasons.find((s) => s.id === game.seasonId);
   const court = season?.courts.find((c) => c.id === game.courtId);
-  return (
-    <Link
-      href={`/live?game=${game.id}`}
-      className={`game-card ${showVenue ? "schedule-game-card" : ""}`}
-    >
+  const className = `game-card ${showVenue ? "schedule-game-card" : ""}`;
+  const content = (
+    <>
       <div className="game-card-top">
         <span>
           {divisionLabel(game.division)}{" "}
@@ -418,12 +417,12 @@ export function GameCard({
         <span
           className={`badge ${game.status === "Live" ? "badge-live" : hasOfficialResult(game) ? "badge-final" : ""}`}
         >
-          {hasOfficialResult(game) ? "FINAL" : game.status.toUpperCase()}
+          {game.conditional ? "IF NECESSARY" : hasOfficialResult(game) ? "FINAL" : game.status.toUpperCase()}
         </span>
       </div>
       <div className="match-team">
         <TeamMark team={home} size="small" />
-        <strong>{home?.name || "TBD"}</strong>
+        <strong>{game.homeLabel || home?.name || "TBD"}</strong>
         <b
           aria-label={hideScores && scored ? "Score hidden" : undefined}
           className={hideScores && scored ? "hidden-score" : ""}
@@ -433,7 +432,7 @@ export function GameCard({
       </div>
       <div className="match-team">
         <TeamMark team={away} size="small" />
-        <strong>{away?.name || "TBD"}</strong>
+        <strong>{game.awayLabel || away?.name || "TBD"}</strong>
         <b
           aria-label={hideScores && scored ? "Score hidden" : undefined}
           className={hideScores && scored ? "hidden-score" : ""}
@@ -454,8 +453,11 @@ export function GameCard({
           : <>{dateTime(game.start, season?.timezone || "Asia/Manila")}{game.start && game.durationMinutes && <> – {new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: season?.timezone || "Asia/Manila" }).format(new Date(Date.parse(game.start) + game.durationMinutes * 60000))}</>}</>}
         <span>{court?.name || "Court TBA"}</span>
       </div>
-    </Link>
+    </>
   );
+  return game.planned
+    ? <article className={className}>{content}</article>
+    : <Link href={`/live?game=${game.id}`} className={className}>{content}</Link>;
 }
 function Overview({
   league,

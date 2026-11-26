@@ -4,6 +4,8 @@ import { playoffFormat } from "@/lib/playoff-format";
 import type { Season } from "@/lib/types";
 
 export default function EliminationRules({ division, season }: { division: string; season?: Season }) {
+  const semifinalSeries = season?.semifinalBestOf === 3;
+  const finalSeries = season?.finalBestOf === 3;
   return <section className="elimination-rules" id="elimination-format" aria-labelledby="elimination-rules-title">
     <header><span className="eyebrow">KNOW THE FORMAT</span><h2 id="elimination-rules-title">Elimination rules & playoff qualification</h2><p>How teams advance in the Junior and Open (Senior) divisions.</p></header>
     <div className="elimination-rule-grid">
@@ -47,14 +49,15 @@ export default function EliminationRules({ division, season }: { division: strin
       })}
     </div>
     <div className="elimination-shared-rules"><h3><ShieldCheck size={19} aria-hidden="true" />Rules for both divisions</h3><ul>
-      <li><strong>Every knockout game is single elimination.</strong> One game decides who advances. Losing ends the title run; semifinal losers still contest third place. There is no twice-to-beat advantage or best-of series.</li>
+      {semifinalSeries || finalSeries ? <li><strong>{semifinalSeries && finalSeries ? "Best-of-three semifinals and finals." : semifinalSeries ? "Best-of-three semifinals." : "Best-of-three finals."}</strong> The first team to win two games wins its series. All other playoff matchups are decided in one game.</li>
+      : <li><strong>Every knockout matchup is single elimination.</strong> One game decides who advances. Semifinal losers contest third place.</li>}
       <li><strong>Tied games require overtime.</strong> A winner must be determined before a result can be confirmed.</li>
       <li><strong>Only confirmed results count.</strong> All group games must be confirmed, and qualification ties and relevant protests resolved, before playoff seeding becomes official.</li>
     </ul>
     <details className="elimination-matchups"><summary>How tied standings are ranked <ChevronDown size={16} aria-hidden="true" /></summary><div>
       <p><strong>First, rank by total confirmed wins.</strong> If teams have the same wins, apply the division’s tiebreakers below.</p>
       <p><strong>Junior:</strong> head-to-head / wins among the tied teams, then point difference among those teams, points scored among those teams, overall point difference, and overall points scored.</p>
-      <p><strong>Open (Senior):</strong> for two tied teams, use their head-to-head result first. For three or more, start with point difference among the tied teams. Next compare points scored among the tied teams, overall point difference, and overall points scored.</p>
+      <p><strong>Open (Senior):</strong> for two tied teams, compare overall group point difference, then total group points scored. For three or more, compare point difference among the tied teams, then points scored among those teams, overall group point difference, and total group points scored.</p>
       <p>A mini-league uses only games between the tied teams. Point difference means points scored minus points conceded. When a tied set splits, the remaining tied subset is recalculated. If teams are still tied after every criterion, the organizer must record the final seed order before seeding.</p>
     </div></details></div>
   </section>;

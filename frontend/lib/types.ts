@@ -1,3 +1,19 @@
+export type PostseasonWeek = {
+  title: string;
+  days: {
+    date: string;
+    summary?: string | null;
+    entries: {
+      time: string;
+      stage: string;
+      matchup: string;
+      gameId?: string | null;
+      highlighted?: boolean;
+      division?: string | null;
+      bracketKey?: string | null;
+    }[];
+  }[];
+};
 export type Season = {
   id: string;
   name: string;
@@ -23,6 +39,9 @@ export type Season = {
   closures?: { courtId: string; start: string; end: string }[];
   tieDecisions?: Record<string, string[]>;
   groupSizes?: Record<string, number[]>;
+  postseasonSchedule?: PostseasonWeek[];
+  semifinalBestOf?: number;
+  finalBestOf?: number;
 };
 export type Team = {
   slot?: number;
@@ -60,6 +79,16 @@ export type Stats = {
   fouls: number;
 };
 export type GameLineup = { presentPlayerIds: string[]; starterPlayerIds: string[] };
+export type MatchupCardGame = Pick<Game,
+  "id" | "seasonId" | "division" | "group" | "stage" | "homeId" | "awayId" |
+  "start" | "durationMinutes" | "courtId" | "status" | "homeScore" | "awayScore" |
+  "quarter" | "resultApproved"
+> & {
+  planned?: boolean;
+  homeLabel?: string;
+  awayLabel?: string;
+  conditional?: boolean;
+};
 export type Game = {
   id: string;
   seasonId: string;

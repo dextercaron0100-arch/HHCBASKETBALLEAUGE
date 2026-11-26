@@ -174,12 +174,23 @@ public static class Scoring
         var groupGames = state.Games.Where(g => g.SeasonId == game.SeasonId && g.Division == game.Division && g.Stage == "Group").ToList();
         var sizes = Competition.GroupSizes(state.Seasons.Single(s => s.Id == game.SeasonId), game.Division);
         var seniorTwelve = game.Division == "Senior" && sizes.SequenceEqual(new[] { 4, 4, 4, 4 });
-        if (!seniorTwelve && (sizes.Count != 2 || sizes.Any(size => size < 4))) return;
+        var juniorWildcards = game.Division == "Junior" && sizes.SequenceEqual(new[] { 4, 4, 4 });
+        if (!seniorTwelve && !juniorWildcards && (sizes.Count != 2 || sizes.Any(size => size < 4))) return;
         var expected = sizes.Sum(size => size * (size - 1) / 2);
         if (groupGames.Count != expected || groupGames.Any(g => !Competition.HasOfficialResult(g))) return;
         var ids = state.Games.Where(g => g.SeasonId == game.SeasonId && g.Division == game.Division).Select(g => g.Id).ToHashSet();
         if (state.Discipline.Any(d => d.Type == "Protest" && !d.Resolved && ids.Contains(d.GameId))) return;
-        if (sizes.SelectMany((_, index) => Competition.Standings(state, game.SeasonId, game.Division, ((char)('A' + index)).ToString()).Take(seniorTwelve ? 3 : 4)).Any(r => r.Unresolved))
+        var unresolved = sizes.SelectMany((_, index) => Competition.Standings(state, game.SeasonId, game.Division, ((char)('A' + index)).ToString()).Take(seniorTwelve || juniorWildcards ? 3 : 4)).Any(r => r.Unresolved);
+        if (juniorWildcards)
+        {
+            var tiers = new[] { ("Winners", 3), ("RunnersUp", 3), ("Wildcards", 2) };
+            unresolved |= tiers.Any(tier =>
+            {
+                var rows = Competition.Standings(state, game.SeasonId, game.Division, tier.Item1).Take(tier.Item2).ToList();
+                return rows.Count != tier.Item2 || rows.Any(row => row.Unresolved);
+            });
+        }
+        if (unresolved)
         {
             if (state.Games.Any(g => g.SeasonId == game.SeasonId && g.Division == game.Division && g.Stage != "Group")) throw new RuleException("This correction creates an unresolved playoff seed tie. Record a tie decision before correcting.");
             return;

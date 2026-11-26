@@ -22,6 +22,9 @@ public static class Commands
                 if (season.FoulLimit is < 1 || season.TimeoutLimit is < 1) throw new RuleException("Foul and timeout limits must be positive.");
                 if (season.TimeoutPeriod is not ("Game" or "Half") || season.OvertimeTimeoutLimit is < 0) throw new RuleException("Choose timeouts per game or half and a nonnegative overtime limit.");
                 var old = state.Seasons.SingleOrDefault(s => s.Id == season.Id);
+                season.PostseasonSchedule = old?.PostseasonSchedule ?? [];
+                season.SemifinalBestOf = old?.SemifinalBestOf ?? 1;
+                season.FinalBestOf = old?.FinalBestOf ?? 1;
                 if (old != null && state.Games.Any(g => g.SeasonId == season.Id && g.Start != null))
                 {
                     if (JsonSerializer.Serialize(new { old.Days, old.Sessions, old.Courts, old.Closures, old.RestMinutes, old.SlotMinutes, old.Timezone }) != JsonSerializer.Serialize(new { season.Days, season.Sessions, season.Courts, season.Closures, season.RestMinutes, season.SlotMinutes, season.Timezone })) throw new RuleException("Use a scheduling preview to change an active calendar.");
@@ -155,8 +158,10 @@ public static class Commands
                 }
                 else
                 {
-                    var final = state.Games.SingleOrDefault(g => g.SeasonId == award.SeasonId && g.Division == award.Division && g.BracketKey == (award.Type == "Champion" ? "F" : "T") && g.Status == "Confirmed");
-                    if (final == null || Competition.Winner(final) != award.TeamId) throw new RuleException("Award recipient must match the confirmed championship/third-place winner.");
+                    var awardSeason = state.Seasons.Single(s => s.Id == award.SeasonId);
+                    var champion = award.Type == "Champion";
+                    var result = Competition.SeriesResult(state, award.SeasonId, award.Division, champion ? "F" : "T", champion ? awardSeason.FinalBestOf : 1, confirmedOnly: true);
+                    if (result?.Winner != award.TeamId) throw new RuleException("Award recipient must match the confirmed championship/third-place winner.");
                 }
                 state.Awards.RemoveAll(a => a.SeasonId == award.SeasonId && a.Division == award.Division && a.Type == award.Type); state.Awards.Add(award with { ApprovedBy = actor }); break;
             default: throw new RuleException("Unknown organizer command.");

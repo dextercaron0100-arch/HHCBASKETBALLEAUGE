@@ -59,8 +59,8 @@ public static class Competition
             if (season.TieDecisions.TryGetValue(key, out var order) && order.Count == ids.Count && order.ToHashSet().SetEquals(ids)) return tied.OrderBy(r => order.IndexOf(r.TeamId)).ToList();
             return tied.OrderBy(r => r.Name).Select(r => r with { Unresolved = true, TieKey = key }).ToList();
         }
-        // Senior multi-team ties start with mini-league differential; Junior uses mini-league wins first.
-        if (criterion == 0 && division == "Senior" && tied.Count > 2) criterion = 1;
+        // Open ties between two teams use overall group statistics.
+        if (division == "Senior") criterion = Math.Max(criterion, tied.Count == 2 ? 3 : 1);
         int Value(Standing r) => criterion switch {
             0 => mini.Count(g => Winner(g) == r.TeamId),
             1 => mini.Sum(g => g.HomeId == r.TeamId ? g.HomeScore - g.AwayScore : g.AwayId == r.TeamId ? g.AwayScore - g.HomeScore : 0),
@@ -73,6 +73,22 @@ public static class Competition
     }
     public static string Winner(Game g) => g.HomeScore > g.AwayScore ? g.HomeId : g.AwayId;
     public static string Loser(Game g) => g.HomeScore > g.AwayScore ? g.AwayId : g.HomeId;
+    public static (string Winner, string Loser)? SeriesResult(LeagueState state, string seasonId, string division,
+        string key, int bestOf, bool confirmedOnly = false)
+    {
+        var wins = new Dictionary<string, int>();
+        for (var leg = 1; leg <= bestOf; leg++)
+        {
+            var gameKey = leg == 1 ? key : $"{key}-{leg}";
+            var game = state.Games.SingleOrDefault(g => g.SeasonId == seasonId && g.Division == division && g.BracketKey == gameKey);
+            if (game == null || (confirmedOnly ? game.Status != "Confirmed" : !HasOfficialResult(game))) return null;
+            var winner = Winner(game);
+            wins[winner] = wins.GetValueOrDefault(winner) + 1;
+            if (wins[winner] > bestOf / 2) return (winner, Loser(game));
+        }
+        return null;
+    }
+
     public static void Advance(LeagueState state, string seasonId, string division)
     {
         var groupGames = state.Games.Where(g => g.SeasonId == seasonId && g.Division == division && g.Stage == "Group").ToList();
@@ -111,38 +127,60 @@ public static class Competition
         }
         var a = standings[0]; var b = standings[1];
         var seconds = state.Seasons.Single(s => s.Id == seasonId).QuarterSeconds;
-        var dependencies = new Dictionary<string, string[]> { ["Q1"] = ["S1"], ["Q3"] = ["S1"], ["Q2"] = ["S2"], ["Q4"] = ["S2"], ["S1"] = ["F", "T"], ["S2"] = ["F", "T"] };
+        var dependencies = new Dictionary<string, string[]>
+        {
+            ["Q1"] = ["S1"], ["Q3"] = ["S1"], ["Q2"] = ["S2"], ["Q4"] = ["S2"],
+            ["S1"] = ["S1-2", "F", "T"], ["S2"] = ["S2-2", "F", "T"],
+            ["S1-2"] = ["S1-3"], ["S2-2"] = ["S2-3"], ["F"] = ["F-2"], ["F-2"] = ["F-3"]
+        };
         if (seniorTwelve)
         {
             dependencies["R1"] = ["Q3"]; dependencies["R2"] = ["Q1"];
             dependencies["R3"] = ["Q4"]; dependencies["R4"] = ["Q2"];
         }
-        void Invalidate(string key)
+        Game? Find(string key) => state.Games.SingleOrDefault(g => g.SeasonId == seasonId && g.Division == division && g.BracketKey == key);
+        void RemoveUnplayed(string key)
         {
-            foreach (var child in dependencies.GetValueOrDefault(key) ?? [])
-            {
-                Invalidate(child);
-                var match = state.Games.SingleOrDefault(g => g.SeasonId == seasonId && g.Division == division && g.BracketKey == child);
-                if (match == null) continue;
-                if (match.Status != "Scheduled" || match.Events.Count > 0) throw new RuleException("This change would invalidate a started playoff result. Resolve the bracket conflict before correcting this result.");
-                state.Games.Remove(match);
-            }
+            foreach (var child in dependencies.GetValueOrDefault(key) ?? []) RemoveUnplayed(child);
+            var match = Find(key);
+            if (match == null) return;
+            if (match.Status != "Scheduled" || match.Events.Count > 0) throw new RuleException("This change would invalidate a started playoff result. Resolve the bracket conflict before correcting this result.");
+            state.Games.Remove(match);
         }
         void Upsert(string key, string stage, string home, string away)
         {
-            var existing = state.Games.SingleOrDefault(g => g.SeasonId == seasonId && g.Division == division && g.BracketKey == key);
-            var number = expectedGames + (key[0] == 'R' ? int.Parse(key[1..]) :
-                (seniorTwelve ? 4 : 0) + (key[0] == 'Q' ? int.Parse(key[1..]) : key[0] == 'S' ? 4 + int.Parse(key[1..]) : key == "T" ? 7 : 8));
-            if (existing == null) state.Games.Add(new Game { SeasonId = seasonId, Division = division, Group = "", Stage = stage, BracketKey = key, Number = number, HomeId = home, AwayId = away, ClockSeconds = seconds });
+            var existing = Find(key);
+            var bracketOffset = key switch
+            {
+                "S1-2" => 9, "S1-3" => 10, "S2-2" => 11, "S2-3" => 12, "F-2" => 13, "F-3" => 14,
+                "T" => 7, "F" => 8,
+                _ => (key[0] == 'S' ? 4 : 0) + int.Parse(key[1..])
+            };
+            var number = expectedGames + bracketOffset + (seniorTwelve && key[0] != 'R' ? 4 : 0);
+            if (existing == null)
+            {
+                var game = new Game { SeasonId = seasonId, Division = division, Group = "", Stage = stage, BracketKey = key, Number = number, HomeId = home, AwayId = away, ClockSeconds = seconds };
+                Scheduling.SetPublishedSlot(season, game);
+                state.Games.Add(game);
+            }
             else if (existing.HomeId != home || existing.AwayId != away)
             {
                 if (existing.Status != "Scheduled" || existing.Events.Count > 0) throw new RuleException("A downstream game has started. Resolve the bracket conflict before correcting this result.");
-                Invalidate(key);
+                foreach (var child in dependencies.GetValueOrDefault(key) ?? []) RemoveUnplayed(child);
                 existing.HomeId = home; existing.AwayId = away; existing.Roster.Clear(); existing.OnCourt.Clear(); existing.StartingFive.Clear(); existing.RosterSnapshots.Clear(); existing.Stats.Clear(); existing.Version++;
             }
             if (existing != null) existing.Number = number;
         }
-        Game? Final(string key) => state.Games.SingleOrDefault(g => g.SeasonId == seasonId && g.Division == division && g.BracketKey == key && HasOfficialResult(g));
+        Game? Final(string key) => Find(key) is { } game && HasOfficialResult(game) ? game : null;
+        void UpsertSeries(string key, string stage, string home, string away, int bestOf)
+        {
+            Upsert(key, stage, home, away);
+            if (bestOf == 1 || Final(key) is not { } first) return;
+            Upsert($"{key}-2", stage, home, away);
+            if (Final($"{key}-2") is not { } second) return;
+            if (Winner(first) == Winner(second)) RemoveUnplayed($"{key}-3");
+            else Upsert($"{key}-3", stage, home, away);
+        }
         if (seniorTwelve)
         {
             var c = standings[2]; var d = standings[3];
@@ -167,9 +205,19 @@ public static class Competition
             Upsert("Q1", "Quarterfinal", a[0].TeamId, b[3].TeamId); Upsert("Q2", "Quarterfinal", a[1].TeamId, b[2].TeamId);
             Upsert("Q3", "Quarterfinal", b[0].TeamId, a[3].TeamId); Upsert("Q4", "Quarterfinal", b[1].TeamId, a[2].TeamId);
         }
-        if (Final("Q1") is { } q1 && Final("Q3") is { } q3) Upsert("S1", "Semifinal", Winner(q1), Winner(q3));
-        if (Final("Q2") is { } q2 && Final("Q4") is { } q4) Upsert("S2", "Semifinal", Winner(q2), Winner(q4));
-        if (Final("S1") is { } s1 && Final("S2") is { } s2) { Upsert("F", "Championship", Winner(s1), Winner(s2)); Upsert("T", "Third place", Loser(s1), Loser(s2)); }
+        if (Final("Q1") is { } q1 && Final("Q3") is { } q3) UpsertSeries("S1", "Semifinal", Winner(q1), Winner(q3), season.SemifinalBestOf);
+        if (Final("Q2") is { } q2 && Final("Q4") is { } q4) UpsertSeries("S2", "Semifinal", Winner(q2), Winner(q4), season.SemifinalBestOf);
+        if (SeriesResult(state, seasonId, division, "S1", season.SemifinalBestOf) is { } s1 &&
+            SeriesResult(state, seasonId, division, "S2", season.SemifinalBestOf) is { } s2)
+        {
+            UpsertSeries("F", "Championship", s1.Winner, s2.Winner, season.FinalBestOf);
+            Upsert("T", "Third place", s1.Loser, s2.Loser);
+        }
+        else
+        {
+            RemoveUnplayed("F");
+            RemoveUnplayed("T");
+        }
     }
     public static bool Suspended(LeagueState state, Player player, Game game)
     {

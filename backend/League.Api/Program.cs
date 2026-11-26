@@ -128,6 +128,19 @@ using (var scope = app.Services.CreateScope())
     }
     if (command == "seed-demo") { await scope.ServiceProvider.GetRequiredService<LeagueStore>().Change("CLI", "seedDemo", "", "Explicit fictional dataset", Demo.Seed); Console.WriteLine("Fictional demo data seeded."); return; }
     if (command == "migrate") { Console.WriteLine("Database ready."); return; }
+    if (command == "publish-postseason-schedule")
+    {
+        if (args.Length is not (3 or 5) || !long.TryParse(args[2], out var revision) ||
+            (args.Length == 5 && (args[3] is not ("1" or "3") || args[4] is not ("1" or "3"))))
+            throw new ArgumentException("Usage: publish-postseason-schedule <season-id> <expected-revision> [<semifinal-best-of> <final-best-of>] < timetable.json");
+        var timetable = JsonSerializer.Deserialize<List<PostseasonWeek>>(await Console.In.ReadToEndAsync(), LeagueStore.Json)
+            ?? throw new ArgumentException("Provide a postseason timetable in JSON.");
+        await scope.ServiceProvider.GetRequiredService<LeagueStore>().Change("CLI", "publishPostseasonSchedule", args[1], "Organizer-supplied postseason timetable",
+            state => Scheduling.PublishPostseason(state, args[1], revision, timetable,
+                args.Length == 5 ? int.Parse(args[3]) : null, args.Length == 5 ? int.Parse(args[4]) : null));
+        Console.WriteLine("Postseason timetable published.");
+        return;
+    }
     if (command == "approve-results")
     {
         if (args.Length < 3 || string.IsNullOrWhiteSpace(args[1])) throw new ArgumentException("Usage: approve-results <reason> <game-id> [game-id ...]");
@@ -158,5 +171,5 @@ static string UserId(ClaimsPrincipal principal) => principal.FindFirstValue(Clai
 static bool IsStaff(ClaimsPrincipal p) => p.IsInRole("Administrator") || p.IsInRole("Organizer");
 static void CheckScorer(ClaimsPrincipal principal, Game game) { if (!IsStaff(principal) && !(principal.IsInRole("Scorekeeper") && game.ScorekeeperId == UserId(principal))) throw new RuleException("You are not assigned to score this game."); }
 static object GameView(Game g) => new { g.Id, g.SeasonId, g.Division, g.Group, g.Stage, g.BracketKey, g.Number, g.HomeId, g.AwayId, g.Start, g.DurationMinutes, g.CourtId, g.Status, g.ResultApproved, g.HomeScore, g.AwayScore, g.Quarter, g.ClockSeconds, g.ClockRunning, g.ClockAt, g.HomeFouls, g.AwayFouls, g.HomeTimeouts, g.AwayTimeouts, g.Version, g.Roster, g.OnCourt, g.StartingFive, g.RosterSnapshots, g.Stats, g.QuarterResults, g.ScorekeeperId, g.OfficialIds, ServerTime = DateTimeOffset.UtcNow };
-static object PublicView(LeagueState s) => new { s.Revision, s.Demo, Seasons = s.Seasons.Select(x => new { x.Id, x.Name, x.Year, x.RegistrationOpen, x.QuarterSeconds, x.OvertimeSeconds, x.FoulLimit, x.TimeoutLimit, x.TimeoutPeriod, x.OvertimeTimeoutLimit, x.Courts, x.Timezone, x.GroupSizes }), Teams = s.Teams.Where(t => t.Status == "Approved").Select(t => new { t.Id, t.Slot, t.SeasonId, t.Division, t.Group, t.Name, t.Coach, t.AssistantCoach, t.Logo, t.Color }), Players = s.Players.Where(p => p.Status == "Approved" && s.Teams.Any(t => t.Id == p.TeamId && t.Status == "Approved")).Select(p => new { p.Id, p.TeamId, p.Name, p.Number, p.Position, p.Photo, p.RosterRole }), Games = s.Games.Select(GameView), Posts = s.Posts.Where(p => p.Published), s.Awards };
+static object PublicView(LeagueState s) => new { s.Revision, s.Demo, Seasons = s.Seasons.Select(x => new { x.Id, x.Name, x.Year, x.RegistrationOpen, x.QuarterSeconds, x.OvertimeSeconds, x.FoulLimit, x.TimeoutLimit, x.TimeoutPeriod, x.OvertimeTimeoutLimit, x.Courts, x.Timezone, x.GroupSizes, x.PostseasonSchedule, x.SemifinalBestOf, x.FinalBestOf }), Teams = s.Teams.Where(t => t.Status == "Approved").Select(t => new { t.Id, t.Slot, t.SeasonId, t.Division, t.Group, t.Name, t.Coach, t.AssistantCoach, t.Logo, t.Color }), Players = s.Players.Where(p => p.Status == "Approved" && s.Teams.Any(t => t.Id == p.TeamId && t.Status == "Approved")).Select(p => new { p.Id, p.TeamId, p.Name, p.Number, p.Position, p.Photo, p.RosterRole }), Games = s.Games.Select(GameView), Posts = s.Posts.Where(p => p.Published), s.Awards };
 public record Credentials(string Email, string Password);
